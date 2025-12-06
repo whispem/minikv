@@ -1,7 +1,4 @@
 //! Blob storage with segmented logs and compaction
-//!
-//! Storage layout: data_dir/blobs/aa/bb/<percent-encoded-key>
-//! where aa/bb are first two bytes of BLAKE3(key)
 
 use crate::common::{blake3_hash, blob_prefix, decode_key, encode_key, Blake3Hasher, Result};
 use crate::volume::index::{BlobLocation, Index};
@@ -50,8 +47,8 @@ impl BlobStore {
             Index::new()
         };
 
-        // Initialize bloom filter
-        let mut bloom = Bloom::new(100_000, 50_000);
+        // Initialize bloom filter with FP rate
+        let mut bloom = Bloom::new_for_fp_rate(100_000, 0.01);
 
         // Replay WAL
         let wal = Wal::open(&wal_path, wal_sync)?;
