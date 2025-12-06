@@ -1,0 +1,175 @@
+syntax = "proto3";
+
+package minikv;
+
+// Internal volume service (coordinator → volume)
+service VolumeInternal {
+  // 2PC write protocol
+  rpc Prepare(PrepareRequest) returns (PrepareResponse);
+  rpc Commit(CommitRequest) returns (CommitResponse);
+  rpc Abort(AbortRequest) returns (AbortResponse);
+  
+  // Replication & repair
+  rpc Pull(PullRequest) returns (stream Chunk);
+  rpc Delete(DeleteRequest) returns (DeleteResponse);
+  
+  // Health & admin
+  rpc Ping(PingRequest) returns (PingResponse);
+  rpc Stats(StatsRequest) returns (StatsResponse);
+}
+
+// Coordinator service (volume → coordinator, raft peers)
+service CoordinatorInternal {
+  // Raft RPCs
+  rpc RequestVote(VoteRequest) returns (VoteResponse);
+  rpc AppendEntries(AppendRequest) returns (AppendResponse);
+  rpc InstallSnapshot(SnapshotRequest) returns (SnapshotResponse);
+  
+  // Volume registration
+  rpc Join(JoinRequest) returns (JoinResponse);
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+}
+
+// ===== 2PC Messages =====
+
+message PrepareRequest {
+  string key = 1;
+  string upload_id = 2;
+  uint64 expected_size = 3;
+  string expected_blake3 = 4;
+}
+
+message PrepareResponse {
+  bool ok = 1;
+  string error = 2;
+}
+
+message CommitRequest {
+  string upload_id = 1;
+  string key = 2;
+}
+
+message CommitResponse {
+  bool ok = 1;
+  string error = 2;
+}
+
+message AbortRequest {
+  string upload_id = 1;
+}
+
+message AbortResponse {
+  bool ok = 1;
+}
+
+// ===== Replication Messages =====
+
+message PullRequest {
+  string key = 1;
+  string source_url = 2;
+}
+
+message Chunk {
+  bytes data = 1;
+}
+
+message DeleteRequest {
+  string key = 1;
+}
+
+message DeleteResponse {
+  bool ok = 1;
+  string error = 2;
+}
+
+// ===== Health Messages =====
+
+message PingRequest {}
+
+message PingResponse {
+  string volume_id = 1;
+  uint64 uptime_secs = 2;
+  uint64 total_keys = 3;
+  uint64 total_bytes = 4;
+}
+
+message StatsRequest {}
+
+message StatsResponse {
+  uint64 total_keys = 1;
+  uint64 total_bytes = 2;
+  uint64 free_bytes = 3;
+  repeated string shards = 4;
+}
+
+// ===== Raft Messages =====
+
+message VoteRequest {
+  uint64 term = 1;
+  string candidate_id = 2;
+  uint64 last_log_index = 3;
+  uint64 last_log_term = 4;
+}
+
+message VoteResponse {
+  uint64 term = 1;
+  bool vote_granted = 2;
+}
+
+message AppendRequest {
+  uint64 term = 1;
+  string leader_id = 2;
+  uint64 prev_log_index = 3;
+  uint64 prev_log_term = 4;
+  repeated LogEntry entries = 5;
+  uint64 leader_commit = 6;
+}
+
+message AppendResponse {
+  uint64 term = 1;
+  bool success = 2;
+  uint64 conflict_index = 3;
+}
+
+message SnapshotRequest {
+  uint64 term = 1;
+  string leader_id = 2;
+  uint64 last_included_index = 3;
+  uint64 last_included_term = 4;
+  bytes data = 5;
+}
+
+message SnapshotResponse {
+  uint64 term = 1;
+}
+
+message LogEntry {
+  uint64 term = 1;
+  uint64 index = 2;
+  bytes data = 3;
+}
+
+// ===== Coordinator Messages =====
+
+message JoinRequest {
+  string volume_id = 1;
+  string address = 2;
+  repeated string shards = 3;
+}
+
+message JoinResponse {
+  bool ok = 1;
+  string cluster_id = 2;
+}
+
+message HeartbeatRequest {
+  string volume_id = 1;
+  uint64 total_keys = 2;
+  uint64 total_bytes = 3;
+  uint64 free_bytes = 4;
+}
+
+message HeartbeatResponse {
+  bool ok = 1;
+  repeated string commands = 2; // e.g., ["compact_shard:0", "rebalance"]
+}
