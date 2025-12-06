@@ -4,8 +4,11 @@
 
 use crate::common::Result;
 
-pub async fn compact_cluster(coordinator_url: &str, shard: Option<u64>) -> Result<CompactReport> {
-    tracing::info!("Starting cluster compaction (shard={:?})", shard);
+pub async fn compact_cluster(
+    _coordinator_url: &str,
+    _shard: Option<u64>,
+) -> Result<CompactReport> {
+    tracing::info!("Starting cluster compaction");
 
     // TODO: Implement compaction logic:
     // 1. Trigger compaction on all volumes (or specific shard)
