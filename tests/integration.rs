@@ -18,7 +18,7 @@ async fn test_volume_persistence() {
 
     // Write data
     {
-        let mut store = BlobStore::open(&data_path, &wal_path, WalSyncPolicy::Always).unwrap();
+        let mut store = BlobStore::new(, &wal_path, WalSyncPolicy::Always).unwrap();
         store.put("key1", b"value1").unwrap();
         store.put("key2", b"value2").unwrap();
         store.save_snapshot().unwrap();
@@ -26,7 +26,7 @@ async fn test_volume_persistence() {
 
     // Reopen and verify
     {
-        let store = BlobStore::open(&data_path, &wal_path, WalSyncPolicy::Always).unwrap();
+        let store = BlobStore::new(, &wal_path, WalSyncPolicy::Always).unwrap();
         assert_eq!(store.get("key1").unwrap().unwrap(), b"value1");
         assert_eq!(store.get("key2").unwrap().unwrap(), b"value2");
     }
@@ -42,14 +42,14 @@ async fn test_wal_replay() {
 
     // Write to WAL
     {
-        let mut store = BlobStore::open(&data_path, &wal_path, WalSyncPolicy::Always).unwrap();
+        let mut store = BlobStore::new(, &wal_path, WalSyncPolicy::Always).unwrap();
         store.put("key1", b"value1").unwrap();
         // Don't save snapshot - WAL only
     }
 
     // Reopen and verify WAL replay
     {
-        let store = BlobStore::open(&data_path, &wal_path, WalSyncPolicy::Always).unwrap();
+        let store = BlobStore::new(, &wal_path, WalSyncPolicy::Always).unwrap();
         assert_eq!(store.get("key1").unwrap().unwrap(), b"value1");
     }
 }
@@ -62,7 +62,7 @@ async fn test_bloom_filter() {
     let data_path = dir.path().join("data");
     let wal_path = dir.path().join("wal");
 
-    let mut store = BlobStore::open(&data_path, &wal_path, WalSyncPolicy::Always).unwrap();
+    let mut store = BlobStore::new(, &wal_path, WalSyncPolicy::Always).unwrap();
 
     // Write keys
     for i in 0..100 {
@@ -84,7 +84,7 @@ async fn test_compaction() {
     let data_path = dir.path().join("data");
     let wal_path = dir.path().join("wal");
 
-    let mut store = BlobStore::open(&data_path, &wal_path, WalSyncPolicy::Always).unwrap();
+    let mut store = BlobStore::new(, &wal_path, WalSyncPolicy::Always).unwrap();
 
     // Write many versions of same keys
     for round in 0..10 {
