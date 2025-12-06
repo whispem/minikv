@@ -1,7 +1,7 @@
 //! HTTP server for public blob access
 
 use crate::common::decode_key;
-use crate::volume::blob::BlobStore;
+use crate::volume::blob::{BlobStore, StoreError};
 use axum::{
     body::Bytes,
     extract::{Path, State},
@@ -110,7 +110,7 @@ async fn put_blob(
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
-                error: e.to_string(),
+                error: format!("{:?}", e), // use Debug instead of to_string
             }),
         )
             .into_response(),
@@ -144,7 +144,7 @@ async fn get_blob(State(state): State<VolumeState>, Path(encoded_key): Path<Stri
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
-                error: e.to_string(),
+                error: format!("{:?}", e),
             }),
         )
             .into_response(),
@@ -181,7 +181,7 @@ async fn delete_blob(
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
-                error: e.to_string(),
+                error: format!("{:?}", e),
             }),
         )
             .into_response(),
