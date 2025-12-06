@@ -44,7 +44,10 @@ impl VolumeServer {
             store: store.clone(),
             volume_id: self.volume_id.clone(),
         };
-        let http_router = create_router(http_state, self.config.max_blob_size as usize / (1024 * 1024));
+        let http_router = create_router(
+            http_state,
+            self.config.max_blob_size as usize / (1024 * 1024),
+        );
 
         // Create gRPC server
         let grpc_service = VolumeGrpcService::new(store, self.volume_id.clone());
