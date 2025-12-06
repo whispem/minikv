@@ -2,7 +2,7 @@
 name = "minikv"
 version = "0.1.0"
 edition = "2021"
-authors = ["Em' <contct.whispem@gmail.com>"]
+authors = ["Em' <whispem@users.noreply.github.com>"]
 description = "A production-grade distributed KV store with Raft consensus in ~1,500 lines"
 license = "MIT"
 repository = "https://github.com/whispem/minikv"
@@ -66,6 +66,10 @@ bytes = "1.11"
 # HTTP client (for volume pull operations)
 reqwest = { version = "0.12", features = ["stream"] }
 tokio-stream = "0.1"
+
+# Tracing and observability
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [build-dependencies]
 tonic-build = "0.12"
