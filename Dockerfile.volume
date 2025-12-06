@@ -1,0 +1,51 @@
+# Dockerfile for volume server
+FROM rust:1.75-slim AS builder
+
+WORKDIR /app
+
+# Install dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    pkg-config \
+    protobuf-compiler \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy manifests
+COPY Cargo.toml Cargo.lock ./
+COPY build.rs ./
+COPY proto ./proto
+
+# Copy source
+COPY src ./src
+
+# Build volume binary
+RUN cargo build --release --bin minikv-volume
+
+# Runtime stage
+FROM debian:bookworm-slim
+
+WORKDIR /app
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy binary
+COPY --from=builder /app/target/release/minikv-volume /usr/local/bin/minikv-volume
+
+# Create data directories
+RUN mkdir -p /data/blobs /data/wal
+
+EXPOSE 6000 6001
+
+# Healthcheck
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:6000/health || exit 1
+
+# Entrypoint script
+COPY scripts/volume-entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
