@@ -91,7 +91,7 @@ async fn put_blob(
                     error: format!("Invalid key: {}", e),
                 }),
             )
-            .into_response()
+                .into_response()
         }
     };
 
@@ -106,14 +106,14 @@ async fn put_blob(
                 volume_id: state.volume_id.clone(),
             }),
         )
-        .into_response(),
+            .into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
                 error: e.to_string(),
             }),
         )
-        .into_response(),
+            .into_response(),
     }
 }
 
@@ -127,7 +127,7 @@ async fn get_blob(State(state): State<VolumeState>, Path(encoded_key): Path<Stri
                     error: format!("Invalid key: {}", e),
                 }),
             )
-            .into_response()
+                .into_response()
         }
     };
 
@@ -140,14 +140,14 @@ async fn get_blob(State(state): State<VolumeState>, Path(encoded_key): Path<Stri
                 error: "Blob not found".to_string(),
             }),
         )
-        .into_response(),
+            .into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
                 error: e.to_string(),
             }),
         )
-        .into_response(),
+            .into_response(),
     }
 }
 
@@ -164,7 +164,7 @@ async fn delete_blob(
                     error: format!("Invalid key: {}", e),
                 }),
             )
-            .into_response()
+                .into_response()
         }
     };
 
@@ -177,13 +177,13 @@ async fn delete_blob(
                 error: "Blob not found".to_string(),
             }),
         )
-        .into_response(),
+            .into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
                 error: e.to_string(),
             }),
         )
-        .into_response(),
+            .into_response(),
     }
 }

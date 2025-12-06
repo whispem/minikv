@@ -193,7 +193,7 @@ impl Default for VolumeConfig {
             grpc_addr: "0.0.0.0:6001".parse().unwrap(),
             data_path: PathBuf::from("./vol-data"),
             wal_path: PathBuf::from("./vol-wal"),
-            coordinators: vec! ["http://localhost:5000".to_string()],
+            coordinators: vec!["http://localhost:5000".to_string()],
             max_blob_size: default_max_blob_size(),
             compaction_interval_secs: default_compaction_interval(),
             compaction_threshold: default_compaction_threshold(),
@@ -263,7 +263,7 @@ impl Config {
             NodeRole::Coordinator => {
                 if self.coordinator.is_none() {
                     return Err(crate::Error::InvalidConfig(
-                        "coordinator config required". into(),
+                        "coordinator config required".into(),
                     ));
                 }
             }

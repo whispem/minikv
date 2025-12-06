@@ -70,12 +70,12 @@ impl Index {
 
     /// Iterate over all entries
     pub fn iter(&self) -> impl Iterator<Item = (&String, &BlobLocation)> {
-        self. map.iter()
+        self.map.iter()
     }
 
     /// Clear all entries
     pub fn clear(&mut self) {
-        self. map.clear();
+        self.map.clear();
     }
 
     /// Save index snapshot to file
@@ -93,17 +93,17 @@ impl Index {
         for (key, loc) in &self.map {
             // Key length + key
             let key_bytes = key.as_bytes();
-            writer.write_all(&(key_bytes.len() as u32).to_le_bytes())? ;
+            writer.write_all(&(key_bytes.len() as u32).to_le_bytes())?;
             writer.write_all(key_bytes)?;
 
             // Location data
             writer.write_all(&loc.shard.to_le_bytes())?;
-            writer.write_all(&loc.offset.to_le_bytes())? ;
+            writer.write_all(&loc.offset.to_le_bytes())?;
             writer.write_all(&loc.size.to_le_bytes())?;
 
             // BLAKE3 hash length + hash
-            let hash_bytes = loc.blake3. as_bytes();
-            writer. write_all(&(hash_bytes.len() as u32).to_le_bytes())?;
+            let hash_bytes = loc.blake3.as_bytes();
+            writer.write_all(&(hash_bytes.len() as u32).to_le_bytes())?;
             writer.write_all(hash_bytes)?;
         }
 
@@ -120,12 +120,12 @@ impl Index {
         let mut magic = [0u8; 8];
         reader.read_exact(&mut magic)?;
         if &magic != SNAPSHOT_MAGIC {
-            return Err(crate::Error::Corrupted("Invalid snapshot magic". into()));
+            return Err(crate::Error::Corrupted("Invalid snapshot magic".into()));
         }
 
         // Read number of entries
         let mut num_entries_bytes = [0u8; 8];
-        reader.read_exact(&mut num_entries_bytes)? ;
+        reader.read_exact(&mut num_entries_bytes)?;
         let num_entries = u64::from_le_bytes(num_entries_bytes);
 
         let mut index = Index::new();
@@ -138,13 +138,13 @@ impl Index {
             let key_len = u32::from_le_bytes(key_len_bytes) as usize;
 
             let mut key_bytes = vec![0u8; key_len];
-            reader. read_exact(&mut key_bytes)?;
+            reader.read_exact(&mut key_bytes)?;
             let key = String::from_utf8(key_bytes)
                 .map_err(|_| crate::Error::Corrupted("Invalid UTF-8 in key".into()))?;
 
             // Read location
             let mut shard_bytes = [0u8; 8];
-            reader. read_exact(&mut shard_bytes)?;
+            reader.read_exact(&mut shard_bytes)?;
             let shard = u64::from_le_bytes(shard_bytes);
 
             let mut offset_bytes = [0u8; 8];
@@ -203,7 +203,7 @@ mod tests {
         assert_eq!(index.len(), 1);
         assert!(index.contains("key1"));
 
-        let loc = index.get("key1"). unwrap();
+        let loc = index.get("key1").unwrap();
         assert_eq!(loc.shard, 0);
         assert_eq!(loc.offset, 100);
         assert_eq!(loc.size, 1024);

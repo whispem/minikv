@@ -1,6 +1,6 @@
 //! Raft consensus node (simplified wrapper)
 //!
-//! This is a minimal Raft implementation wrapper. 
+//! This is a minimal Raft implementation wrapper.
 //! For production, use a full Raft library like tikv/raft.
 
 use crate::common::Result;
@@ -45,7 +45,7 @@ impl RaftNode {
     }
 
     pub fn is_leader(&self) -> bool {
-        matches!(*self.role.lock(). unwrap(), RaftRole::Leader)
+        matches!(*self.role.lock().unwrap(), RaftRole::Leader)
     }
 
     pub fn get_role(&self) -> RaftRole {
@@ -70,13 +70,13 @@ impl RaftNode {
     pub fn step_down(&self, new_term: u64, leader_id: Option<String>) {
         *self.role.lock().unwrap() = RaftRole::Follower;
         *self.term.lock().unwrap() = new_term;
-        *self. leader_id.lock().unwrap() = leader_id;
-        *self.voted_for.lock(). unwrap() = None;
+        *self.leader_id.lock().unwrap() = leader_id;
+        *self.voted_for.lock().unwrap() = None;
     }
 
     /// Start election
     pub fn start_election(&self) -> u64 {
-        let mut term = self.term.lock(). unwrap();
+        let mut term = self.term.lock().unwrap();
         *term += 1;
         let new_term = *term;
 
@@ -90,7 +90,7 @@ impl RaftNode {
     /// Grant vote
     pub fn grant_vote(&self, term: u64, candidate_id: String) -> bool {
         let mut current_term = self.term.lock().unwrap();
-        let mut voted = self.voted_for.lock(). unwrap();
+        let mut voted = self.voted_for.lock().unwrap();
 
         if term < *current_term {
             return false;
@@ -111,7 +111,7 @@ impl RaftNode {
 
     /// Replicate entry (simplified)
     pub fn replicate(&self, _entry: Vec<u8>) -> Result<()> {
-        if ! self.is_leader() {
+        if !self.is_leader() {
             return Err(crate::Error::NotLeader(
                 self.get_leader().unwrap_or_else(|| "unknown".to_string()),
             ));
