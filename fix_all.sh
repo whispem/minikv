@@ -139,25 +139,105 @@ sed -i.bak 's/body: Bytes/_body: Bytes/g' src/coordinator/http.rs
 rm -f src/coordinator/http.rs.bak
 echo -e "${GREEN}✓${NC} coordinator/http.rs fixed"
 
-# Fix 4: src/ops/*.rs - ADD UNDERSCORES
+# Fix 4: src/ops/*.rs - CREATE SEPARATE FILES
 echo -e "${BLUE}🔧 Fix 4/7: Fixing ops stubs (verify, repair, compact)${NC}"
 
 # verify.rs
-sed -i.bak 's/coordinator_url: &str/_coordinator_url: &str/g' src/ops/verify.rs
-sed -i.bak 's/deep: bool/_deep: bool/g' src/ops/verify.rs
-sed -i.bak 's/concurrency: usize/_concurrency: usize/g' src/ops/verify.rs
-rm -f src/ops/verify.rs.bak
+cat > src/ops/verify.rs << 'EOF'
+//! Verify cluster integrity
+
+#![allow(dead_code)]
+
+use crate::common::Result;
+
+pub async fn verify_cluster(
+    _coordinator_url: &str,
+    _deep: bool,
+    _concurrency: usize,
+) -> Result<VerifyReport> {
+    tracing::info!("Starting cluster verification");
+
+    // TODO: Implement verification logic
+
+    Ok(VerifyReport {
+        total_keys: 0,
+        healthy: 0,
+        under_replicated: 0,
+        corrupted: 0,
+        orphaned: 0,
+    })
+}
+
+#[derive(Debug)]
+pub struct VerifyReport {
+    pub total_keys: usize,
+    pub healthy: usize,
+    pub under_replicated: usize,
+    pub corrupted: usize,
+    pub orphaned: usize,
+}
+EOF
 
 # repair.rs
-sed -i.bak 's/coordinator_url: &str/_coordinator_url: &str/g' src/ops/repair.rs
-sed -i.bak 's/replicas: usize/_replicas: usize/g' src/ops/repair.rs
-sed -i.bak 's/dry_run: bool/_dry_run: bool/g' src/ops/repair.rs
-rm -f src/ops/repair.rs.bak
+cat > src/ops/repair.rs << 'EOF'
+//! Repair under-replicated keys
+
+#![allow(dead_code)]
+
+use crate::common::Result;
+
+pub async fn repair_cluster(
+    _coordinator_url: &str,
+    _replicas: usize,
+    _dry_run: bool,
+) -> Result<RepairReport> {
+    tracing::info!("Starting cluster repair");
+
+    // TODO: Implement repair logic
+
+    Ok(RepairReport {
+        keys_checked: 0,
+        keys_repaired: 0,
+        bytes_copied: 0,
+    })
+}
+
+#[derive(Debug)]
+pub struct RepairReport {
+    pub keys_checked: usize,
+    pub keys_repaired: usize,
+    pub bytes_copied: u64,
+}
+EOF
 
 # compact.rs
-sed -i.bak 's/coordinator_url: &str/_coordinator_url: &str/g' src/ops/compact.rs
-sed -i.bak 's/shard: Option<u64>/_shard: Option<u64>/g' src/ops/compact.rs
-rm -f src/ops/compact.rs.bak
+cat > src/ops/compact.rs << 'EOF'
+//! Cluster-wide compaction
+
+#![allow(dead_code)]
+
+use crate::common::Result;
+
+pub async fn compact_cluster(
+    _coordinator_url: &str,
+    _shard: Option<u64>,
+) -> Result<CompactReport> {
+    tracing::info!("Starting cluster compaction");
+
+    // TODO: Implement compaction logic
+
+    Ok(CompactReport {
+        volumes_compacted: 0,
+        bytes_freed: 0,
+    })
+}
+
+#[derive(Debug)]
+pub struct CompactReport {
+    pub volumes_compacted: usize,
+    pub bytes_freed: u64,
+}
+EOF
 
 echo -e "${GREEN}✓${NC} Ops stubs fixed"
 
