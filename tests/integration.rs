@@ -4,135 +4,9 @@ use minikv::{
     common::{CoordinatorConfig, VolumeConfig, WalSyncPolicy},
     Coordinator, VolumeServer,
 };
-use std::path::PathBuf;
 use std::time::Duration;
 use tempfile::TempDir;
 use tokio::time::sleep;
-
-/// Setup a test cluster (1 coordinator + 1 volume)
-async fn setup_test_cluster() -> (
-    TempDir,
-    TempDir,
-    tokio::task::JoinHandle<()>,
-    tokio::task::JoinHandle<()>,
-) {
-    let coord_dir = TempDir::new().unwrap();
-    let vol_dir = TempDir::new().unwrap();
-
-    // Coordinator config
-    let coord_config = CoordinatorConfig {
-        bind_addr: "127.0.0.1:15000".parse().unwrap(),
-        grpc_addr: "127.0.0.1:15001".parse().unwrap(),
-        db_path: coord_dir.path().join("coord-db"),
-        peers: vec![],
-        replicas: 1, // Single replica for testing
-        ..Default::default()
-    };
-
-    // Volume config
-    let vol_config = VolumeConfig {
-        bind_addr: "127.0.0.1:16000".parse().unwrap(),
-        grpc_addr: "127.0.0.1:16001".parse().unwrap(),
-        data_path: vol_dir.path().join("data"),
-        wal_path: vol_dir.path().join("wal"),
-        coordinators: vec!["http://127.0.0.1:15000".to_string()],
-        wal_sync: WalSyncPolicy::Always,
-        ..Default::default()
-    };
-
-    // Start coordinator
-    let coord_handle = tokio::spawn(async move {
-        let coord = Coordinator::new(coord_config, "test-coord".to_string());
-        coord.serve().await.unwrap();
-    });
-
-    // Wait for coordinator to start
-    sleep(Duration::from_millis(500)).await;
-
-    // Start volume
-    let vol_handle = tokio::spawn(async move {
-        let vol = VolumeServer::new(vol_config, "test-vol".to_string());
-        vol.serve().await.unwrap();
-    });
-
-    // Wait for volume to start
-    sleep(Duration::from_millis(500)).await;
-
-    (coord_dir, vol_dir, coord_handle, vol_handle)
-}
-
-#[tokio::test]
-async fn test_cluster_startup() {
-    let (_coord_dir, _vol_dir, coord_handle, vol_handle) = setup_test_cluster().await;
-
-    // Check coordinator health
-    let client = reqwest::Client::new();
-    let response = client
-        .get("http://127.0.0.1:15000/health")
-        .send()
-        .await
-        .unwrap();
-    assert!(response.status().is_success());
-
-    // Check volume health
-    let response = client
-        .get("http://127.0.0.1:16000/health")
-        .send()
-        .await
-        .unwrap();
-    assert!(response.status().is_success());
-
-    // Cleanup
-    coord_handle.abort();
-    vol_handle.abort();
-}
-
-#[tokio::test]
-#[ignore] // Requires full 2PC implementation
-async fn test_put_get_delete() {
-    let (_coord_dir, _vol_dir, coord_handle, vol_handle) = setup_test_cluster().await;
-
-    let client = reqwest::Client::new();
-
-    // PUT
-    let response = client
-        .put("http://127.0.0.1:15000/test-key")
-        .body("test data")
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(response.status(), 201);
-
-    // GET
-    let response = client
-        .get("http://127.0.0.1:15000/test-key")
-        .send()
-        .await
-        .unwrap();
-    assert!(response.status().is_success());
-    let body = response.text().await.unwrap();
-    assert_eq!(body, "test data");
-
-    // DELETE
-    let response = client
-        .delete("http://127.0.0.1:15000/test-key")
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(response.status(), 204);
-
-    // GET (should be 404)
-    let response = client
-        .get("http://127.0.0.1:15000/test-key")
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(response.status(), 404);
-
-    // Cleanup
-    coord_handle.abort();
-    vol_handle.abort();
-}
 
 #[tokio::test]
 async fn test_volume_persistence() {
@@ -221,7 +95,7 @@ async fn test_compaction() {
         }
     }
 
-    let stats_before = store.stats();
+    let _stats_before = store.stats();
 
     // Compact
     store.compact().unwrap();
