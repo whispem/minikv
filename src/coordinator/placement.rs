@@ -1,11 +1,12 @@
 //! Placement strategy using HRW hashing and sharding
 
-use crate::common::{hrw_hash, select_replicas, shard_key, ConsistentHashRing, Result};
-use crate::coordinator::metadata::{MetadataStore, VolumeMetadata};
+use crate::common::{select_replicas, shard_key, ConsistentHashRing, Result};
+use crate::coordinator::metadata::VolumeMetadata;
 
 pub struct PlacementManager {
     ring: ConsistentHashRing,
     replicas: usize,
+    num_shards: u64,
 }
 
 impl PlacementManager {
@@ -13,6 +14,7 @@ impl PlacementManager {
         Self {
             ring: ConsistentHashRing::new(num_shards),
             replicas,
+            num_shards,
         }
     }
 
@@ -25,9 +27,9 @@ impl PlacementManager {
         // Filter healthy volumes
         let healthy: Vec<String> = volumes
             .iter()
-            .filter(|v| v.state.is_healthy())
+            .filter(|v| v.state. is_healthy())
             .map(|v| v.volume_id.clone())
-            .collect();
+            . collect();
 
         if healthy.is_empty() {
             return Err(crate::Error::NoHealthyVolumes);
@@ -48,14 +50,14 @@ impl PlacementManager {
 
     /// Get shard for key
     pub fn get_shard(&self, key: &str) -> u64 {
-        shard_key(key, self.ring.num_shards)
+        shard_key(key, self. num_shards)
     }
 
     /// Rebalance shards across volumes
     pub fn rebalance(&mut self, volumes: &[VolumeMetadata]) {
         let available: Vec<String> = volumes
             .iter()
-            .filter(|v| v.state.is_healthy())
+            .filter(|v| v.state. is_healthy())
             .map(|v| v.volume_id.clone())
             .collect();
 
@@ -64,7 +66,7 @@ impl PlacementManager {
 
     /// Get volumes for a specific shard
     pub fn get_shard_volumes(&self, shard: u64) -> Option<Vec<String>> {
-        self.ring.get_shard_nodes(shard).map(|nodes| nodes.to_vec())
+        self.ring. get_shard_nodes(shard). map(|nodes| nodes.to_vec())
     }
 }
 
@@ -98,7 +100,7 @@ mod tests {
             mock_volume("vol-4", NodeState::Alive),
         ];
 
-        let selected = manager.select_volumes("test-key", &volumes).unwrap();
+        let selected = manager. select_volumes("test-key", &volumes). unwrap();
         assert_eq!(selected.len(), 3);
     }
 
