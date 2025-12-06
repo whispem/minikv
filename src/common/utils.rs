@@ -1,4 +1,4 @@
-//! Utility functions for minikv
+//!  Utility functions for minikv
 
 use percent_encoding::{percent_decode_str, utf8_percent_encode, AsciiSet, CONTROLS};
 use serde::{Deserialize, Serialize};
@@ -9,7 +9,7 @@ const KEY_ENCODE_SET: &AsciiSet = &CONTROLS
     .add(b'/')
     .add(b'%')
     .add(b' ')
-    .add(b'?')
+    .add(b'? ')
     .add(b'#')
     .add(b'&');
 
@@ -32,7 +32,7 @@ pub fn format_bytes(bytes: u64) -> String {
     let mut size = bytes as f64;
     let mut unit_idx = 0;
 
-    while size >= 1024.0 && unit_idx < UNITS.len() - 1 {
+    while size >= 1024. 0 && unit_idx < UNITS.len() - 1 {
         size /= 1024.0;
         unit_idx += 1;
     }
@@ -50,7 +50,7 @@ pub fn parse_duration(s: &str) -> crate::Result<std::time::Duration> {
     let (num_str, unit) = if s.ends_with("ms") {
         (&s[..s.len() - 2], "ms")
     } else {
-        let unit = s.chars().last().unwrap();
+        let _unit = s.chars().last().unwrap();
         (&s[..s.len() - 1], &s[s.len() - 1..])
     };
 
@@ -155,7 +155,7 @@ where
                     e,
                     delay
                 );
-                tokio::time::sleep(delay).await;
+                tokio::time::sleep(delay). await;
                 delay *= 2; // Exponential backoff
             }
             Err(e) => return Err(e),
@@ -193,7 +193,7 @@ pub fn validate_key(key: &str) -> crate::Result<()> {
     }
 
     // Disallow control characters
-    if key.chars().any(|c| c.is_control()) {
+    if key.chars().any(|c| c. is_control()) {
         return Err(crate::Error::InvalidConfig(
             "key contains invalid characters".into(),
         ));
@@ -208,7 +208,7 @@ mod tests {
 
     #[test]
     fn test_encode_decode_key() {
-        let key = "my/path/to/file.txt";
+        let key = "my/path/to/file. txt";
         let encoded = encode_key(key);
         assert!(encoded.contains("%2F")); // '/' is encoded
 
@@ -218,11 +218,11 @@ mod tests {
 
     #[test]
     fn test_format_bytes() {
-        assert_eq!(format_bytes(0), "0.00 B");
+        assert_eq!(format_bytes(0), "0. 00 B");
         assert_eq!(format_bytes(1023), "1023.00 B");
         assert_eq!(format_bytes(1024), "1.00 KB");
         assert_eq!(format_bytes(1024 * 1024), "1.00 MB");
-        assert_eq!(format_bytes(1024 * 1024 * 1024), "1.00 GB");
+        assert_eq!(format_bytes(1024 * 1024 * 1024), "1. 00 GB");
     }
 
     #[test]
@@ -262,11 +262,11 @@ mod tests {
         assert!(NodeState::Alive.can_write());
         assert!(NodeState::Alive.can_read());
 
-        assert!(!NodeState::Dead.is_healthy());
+        assert! (!NodeState::Dead.is_healthy());
         assert!(!NodeState::Dead.can_write());
         assert!(!NodeState::Dead.can_read());
 
-        assert!(!NodeState::Draining.can_write());
+        assert! (!NodeState::Draining.can_write());
         assert!(NodeState::Draining.can_read());
     }
 
@@ -282,7 +282,7 @@ mod tests {
     fn test_validate_key() {
         assert!(validate_key("normal-key").is_ok());
         assert!(validate_key("path/to/key").is_ok());
-        assert!(validate_key("").is_err());
-        assert!(validate_key(&"x".repeat(2000)).is_err());
+        assert!(validate_key(""). is_err());
+        assert!(validate_key(&"x". repeat(2000)).is_err());
     }
 }
