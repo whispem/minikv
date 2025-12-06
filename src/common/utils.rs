@@ -56,7 +56,7 @@ pub fn parse_duration(s: &str) -> crate::Result<std::time::Duration> {
 
     let num: u64 = num_str
         .parse()
-        .map_err(|_| crate::Error::InvalidConfig(format!("invalid duration: {}", s)))?;
+        .map_err(|_| crate::Error::InvalidConfig(format! ("invalid duration: {}", s)))?;
 
     let duration = match unit {
         "ms" => std::time::Duration::from_millis(num),
@@ -222,7 +222,7 @@ mod tests {
         assert_eq!(format_bytes(1023), "1023.00 B");
         assert_eq!(format_bytes(1024), "1.00 KB");
         assert_eq!(format_bytes(1024 * 1024), "1.00 MB");
-        assert_eq!(format_bytes(1024 * 1024 * 1024), "1. 00 GB");
+        assert_eq!(format_bytes(1024 * 1024 * 1024), "1.00 GB");
     }
 
     #[test]
@@ -264,7 +264,7 @@ mod tests {
 
         assert! (!NodeState::Dead.is_healthy());
         assert!(!NodeState::Dead.can_write());
-        assert!(!NodeState::Dead.can_read());
+        assert!(! NodeState::Dead.can_read());
 
         assert! (!NodeState::Draining.can_write());
         assert!(NodeState::Draining.can_read());
@@ -283,6 +283,6 @@ mod tests {
         assert!(validate_key("normal-key").is_ok());
         assert!(validate_key("path/to/key").is_ok());
         assert!(validate_key(""). is_err());
-        assert!(validate_key(&"x". repeat(2000)).is_err());
+        assert!(validate_key(&"x".repeat(2000)).is_err());
     }
 }
