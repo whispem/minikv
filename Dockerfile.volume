@@ -11,7 +11,9 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy manifests
-COPY Cargo.toml Cargo.lock ./
+COPY Cargo.toml ./
+   COPY Cargo.lock* ./
+   RUN test -f Cargo.lock || cargo generate-lockfile
 COPY build.rs ./
 COPY proto ./proto
 
