@@ -93,7 +93,7 @@ fn default_num_shards() -> u64 {
 impl Default for CoordinatorConfig {
     fn default() -> Self {
         Self {
-            bind_addr: "0.0. 0.0:5000".parse().unwrap(),
+            bind_addr: "0.0.0.0:5000".parse().unwrap(),
             grpc_addr: "0.0.0.0:5001".parse().unwrap(),
             db_path: PathBuf::from("./coord-data"),
             peers: vec![],
@@ -249,7 +249,7 @@ impl Config {
     pub fn to_file(&self, path: impl AsRef<std::path::Path>) -> crate::Result<()> {
         let content = serde_json::to_string_pretty(self)
             .map_err(|e| crate::Error::Other(format!("Failed to serialize config: {}", e)))?;
-        std::fs::write(path, content)? ;
+        std::fs::write(path, content)?;
         Ok(())
     }
 
@@ -263,7 +263,7 @@ impl Config {
             NodeRole::Coordinator => {
                 if self.coordinator.is_none() {
                     return Err(crate::Error::InvalidConfig(
-                        "coordinator config required".into(),
+                        "coordinator config required". into(),
                     ));
                 }
             }
