@@ -117,10 +117,7 @@ async fn put_blob(
     }
 }
 
-async fn get_blob(
-    State(state): State<VolumeState>,
-    Path(encoded_key): Path<String>,
-) -> Response {
+async fn get_blob(State(state): State<VolumeState>, Path(encoded_key): Path<String>) -> Response {
     let key = match decode_key(&encoded_key) {
         Ok(k) => k,
         Err(e) => {

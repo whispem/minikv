@@ -59,11 +59,7 @@ impl MetadataStore {
         opts.create_if_missing(true);
         opts.create_missing_column_families(true);
 
-        let db = DB::open_cf(
-            &opts,
-            path,
-            vec![CF_KEYS, CF_VOLUMES, CF_CONFIG],
-        )?;
+        let db = DB::open_cf(&opts, path, vec![CF_KEYS, CF_VOLUMES, CF_CONFIG])?;
 
         Ok(Self { db })
     }
@@ -103,7 +99,7 @@ impl MetadataStore {
     pub fn list_keys(&self) -> Result<Vec<String>> {
         let cf = self.db.cf_handle(CF_KEYS).unwrap();
         let iter = self.db.iterator_cf(cf, rocksdb::IteratorMode::Start);
-        
+
         let mut keys = Vec::new();
         for item in iter {
             let (key_bytes, _) = item?;
@@ -111,7 +107,7 @@ impl MetadataStore {
                 .map_err(|_| crate::Error::MetadataCorrupted("Invalid UTF-8".into()))?;
             keys.push(key);
         }
-        
+
         Ok(keys)
     }
 
@@ -143,7 +139,7 @@ impl MetadataStore {
     pub fn list_volumes(&self) -> Result<Vec<VolumeMetadata>> {
         let cf = self.db.cf_handle(CF_VOLUMES).unwrap();
         let iter = self.db.iterator_cf(cf, rocksdb::IteratorMode::Start);
-        
+
         let mut volumes = Vec::new();
         for item in iter {
             let (_, value_bytes) = item?;
@@ -151,7 +147,7 @@ impl MetadataStore {
                 .map_err(|e| crate::Error::MetadataCorrupted(e.to_string()))?;
             volumes.push(meta);
         }
-        
+
         Ok(volumes)
     }
 

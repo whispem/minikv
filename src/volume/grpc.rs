@@ -203,7 +203,13 @@ impl VolumeInternal for VolumeGrpcService {
             while let Some(chunk_result) = stream.next().await {
                 match chunk_result {
                     Ok(bytes) => {
-                        if tx.send(Ok(Chunk { data: bytes.to_vec() })).await.is_err() {
+                        if tx
+                            .send(Ok(Chunk {
+                                data: bytes.to_vec(),
+                            }))
+                            .await
+                            .is_err()
+                        {
                             break;
                         }
                     }
@@ -247,10 +253,7 @@ impl VolumeInternal for VolumeGrpcService {
         }
     }
 
-    async fn ping(
-        &self,
-        _request: Request<PingRequest>,
-    ) -> Result<Response<PingResponse>, Status> {
+    async fn ping(&self, _request: Request<PingRequest>) -> Result<Response<PingResponse>, Status> {
         let store = self.store.lock().unwrap();
         let stats = store.stats();
 

@@ -37,7 +37,7 @@ impl Wal {
     /// Open or create WAL
     pub fn open(path: impl AsRef<Path>, sync_policy: WalSyncPolicy) -> Result<Self> {
         let path = path.as_ref().to_path_buf();
-        
+
         // Create parent directory
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
@@ -107,7 +107,13 @@ impl Wal {
     }
 
     /// Write an entry to the WAL
-    fn write_entry(&mut self, sequence: u64, op: u8, key: &str, value: Option<&[u8]>) -> Result<()> {
+    fn write_entry(
+        &mut self,
+        sequence: u64,
+        op: u8,
+        key: &str,
+        value: Option<&[u8]>,
+    ) -> Result<()> {
         let key_bytes = key.as_bytes();
         let val_bytes = value.unwrap_or(&[]);
 
@@ -115,8 +121,10 @@ impl Wal {
         self.writer.write_all(&WAL_MAGIC)?;
         self.writer.write_all(&sequence.to_le_bytes())?;
         self.writer.write_all(&[op])?;
-        self.writer.write_all(&(key_bytes.len() as u32).to_le_bytes())?;
-        self.writer.write_all(&(val_bytes.len() as u32).to_le_bytes())?;
+        self.writer
+            .write_all(&(key_bytes.len() as u32).to_le_bytes())?;
+        self.writer
+            .write_all(&(val_bytes.len() as u32).to_le_bytes())?;
 
         // Write payload
         self.writer.write_all(key_bytes)?;
@@ -219,8 +227,8 @@ impl Wal {
         // Read key
         let mut key_bytes = vec![0u8; key_len];
         reader.read_exact(&mut key_bytes)?;
-        let key = String::from_utf8(key_bytes)
-            .map_err(|_| Error::Wal("Invalid UTF-8 in key".into()))?;
+        let key =
+            String::from_utf8(key_bytes).map_err(|_| Error::Wal("Invalid UTF-8 in key".into()))?;
 
         // Read value
         let value = if op[0] == OP_PUT {

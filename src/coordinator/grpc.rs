@@ -18,17 +18,26 @@ impl CoordGrpcService {
 
 #[tonic::async_trait]
 impl CoordinatorInternal for CoordGrpcService {
-    async fn request_vote(&self, _req: Request<VoteRequest>) -> Result<Response<VoteResponse>, Status> {
+    async fn request_vote(
+        &self,
+        _req: Request<VoteRequest>,
+    ) -> Result<Response<VoteResponse>, Status> {
         // TODO: Implement Raft RequestVote RPC
         Err(Status::unimplemented("RequestVote not implemented"))
     }
 
-    async fn append_entries(&self, _req: Request<AppendRequest>) -> Result<Response<AppendResponse>, Status> {
+    async fn append_entries(
+        &self,
+        _req: Request<AppendRequest>,
+    ) -> Result<Response<AppendResponse>, Status> {
         // TODO: Implement Raft AppendEntries RPC
         Err(Status::unimplemented("AppendEntries not implemented"))
     }
 
-    async fn install_snapshot(&self, _req: Request<SnapshotRequest>) -> Result<Response<SnapshotResponse>, Status> {
+    async fn install_snapshot(
+        &self,
+        _req: Request<SnapshotRequest>,
+    ) -> Result<Response<SnapshotResponse>, Status> {
         Err(Status::unimplemented("InstallSnapshot not implemented"))
     }
 
@@ -40,7 +49,10 @@ impl CoordinatorInternal for CoordGrpcService {
         }))
     }
 
-    async fn heartbeat(&self, _req: Request<HeartbeatRequest>) -> Result<Response<HeartbeatResponse>, Status> {
+    async fn heartbeat(
+        &self,
+        _req: Request<HeartbeatRequest>,
+    ) -> Result<Response<HeartbeatResponse>, Status> {
         // TODO: Update volume state
         Ok(Response::new(HeartbeatResponse {
             ok: true,

@@ -10,7 +10,12 @@ use tempfile::TempDir;
 use tokio::time::sleep;
 
 /// Setup a test cluster (1 coordinator + 1 volume)
-async fn setup_test_cluster() -> (TempDir, TempDir, tokio::task::JoinHandle<()>, tokio::task::JoinHandle<()>) {
+async fn setup_test_cluster() -> (
+    TempDir,
+    TempDir,
+    tokio::task::JoinHandle<()>,
+    tokio::task::JoinHandle<()>,
+) {
     let coord_dir = TempDir::new().unwrap();
     let vol_dir = TempDir::new().unwrap();
 

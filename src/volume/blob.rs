@@ -284,12 +284,9 @@ mod tests {
         let wal_path = dir.path().join("wal.log");
 
         {
-            let mut store = BlobStore::open(
-                &data_dir,
-                &wal_path,
-                crate::common::WalSyncPolicy::Always,
-            )
-            .unwrap();
+            let mut store =
+                BlobStore::open(&data_dir, &wal_path, crate::common::WalSyncPolicy::Always)
+                    .unwrap();
             store.put("key1", b"value1").unwrap();
             store.put("key2", b"value2").unwrap();
             store.save_snapshot().unwrap();
@@ -297,12 +294,8 @@ mod tests {
 
         // Reopen
         {
-            let store = BlobStore::open(
-                &data_dir,
-                &wal_path,
-                crate::common::WalSyncPolicy::Always,
-            )
-            .unwrap();
+            let store = BlobStore::open(&data_dir, &wal_path, crate::common::WalSyncPolicy::Always)
+                .unwrap();
             assert_eq!(store.get("key1").unwrap().unwrap(), b"value1");
             assert_eq!(store.get("key2").unwrap().unwrap(), b"value2");
         }

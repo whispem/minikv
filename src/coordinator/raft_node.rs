@@ -129,7 +129,7 @@ pub fn start_raft_tasks(node: Arc<RaftNode>) -> tokio::task::JoinHandle<()> {
         // - Send heartbeats to followers
         // - Handle election timeouts
         // - Manage log replication
-        
+
         loop {
             tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
         }

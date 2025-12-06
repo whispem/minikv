@@ -3,7 +3,14 @@
 use crate::coordinator::metadata::{KeyMetadata, KeyState, MetadataStore};
 use crate::coordinator::placement::PlacementManager;
 use crate::coordinator::raft_node::RaftNode;
-use axum::{body::Bytes, extract::{Path, State}, http::StatusCode, response::{IntoResponse, Response}, routing::{delete, get, post}, Json, Router};
+use axum::{
+    body::Bytes,
+    extract::{Path, State},
+    http::StatusCode,
+    response::{IntoResponse, Response},
+    routing::{delete, get, post},
+    Json, Router,
+};
 use serde::Serialize;
 use std::sync::{Arc, Mutex};
 

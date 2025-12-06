@@ -36,7 +36,7 @@ impl VolumeServer {
         let mut opts = rocksdb::Options::default();
         opts.create_if_missing(true);
         opts.set_compression_type(rocksdb::DBCompressionType::Lz4);
-        
+
         let db = rocksdb::DB::open(&opts, db_path)?;
 
         let storage = Arc::new(RwLock::new(VolumeStorage { db }));
@@ -53,7 +53,7 @@ impl VolumeServer {
     /// Start the gRPC server
     pub async fn serve(self) -> Result<()> {
         let addr = self.addr.parse()?;
-        
+
         tracing::info!("Volume server {} listening on {}", self.id, addr);
 
         // Register with coordinator
@@ -71,11 +71,11 @@ impl VolumeServer {
     /// Register this volume with the coordinator
     async fn register_with_coordinator(&self) -> Result<()> {
         tracing::info!("Registering with coordinator at {}", self.coordinator_addr);
-        
+
         // TODO: Implement actual gRPC call to coordinator
         // For now, just log the registration
         tracing::info!("Volume {} registered successfully", self.id);
-        
+
         Ok(())
     }
 
@@ -131,7 +131,10 @@ mod tests {
         .unwrap();
 
         // Test put
-        server.put(b"key1".to_vec(), b"value1".to_vec()).await.unwrap();
+        server
+            .put(b"key1".to_vec(), b"value1".to_vec())
+            .await
+            .unwrap();
 
         // Test get
         let value = server.get(b"key1").await.unwrap();

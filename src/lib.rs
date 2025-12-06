@@ -65,8 +65,8 @@
 
 pub mod common;
 pub mod coordinator;
-pub mod volume;
 pub mod ops;
+pub mod volume;
 
 // Re-export commonly used types
 pub use common::{Config, Error, Result};
@@ -82,9 +82,4 @@ pub mod proto {
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Build info
-pub const BUILD_INFO: &str = concat!(
-    env!("CARGO_PKG_VERSION"),
-    " (",
-    env!("CARGO_PKG_NAME"),
-    ")"
-);
+pub const BUILD_INFO: &str = concat!(env!("CARGO_PKG_VERSION"), " (", env!("CARGO_PKG_NAME"), ")");

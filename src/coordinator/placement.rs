@@ -1,7 +1,7 @@
 //! Placement strategy using HRW hashing and sharding
 
 use crate::common::{hrw_hash, select_replicas, shard_key, ConsistentHashRing, Result};
-use crate::coordinator::metadata::{VolumeMetadata, MetadataStore};
+use crate::coordinator::metadata::{MetadataStore, VolumeMetadata};
 
 pub struct PlacementManager {
     ring: ConsistentHashRing,
@@ -90,7 +90,7 @@ mod tests {
     #[test]
     fn test_select_volumes() {
         let manager = PlacementManager::new(256, 3);
-        
+
         let volumes = vec![
             mock_volume("vol-1", NodeState::Alive),
             mock_volume("vol-2", NodeState::Alive),
@@ -105,7 +105,7 @@ mod tests {
     #[test]
     fn test_insufficient_replicas() {
         let manager = PlacementManager::new(256, 3);
-        
+
         let volumes = vec![
             mock_volume("vol-1", NodeState::Alive),
             mock_volume("vol-2", NodeState::Alive),
@@ -118,7 +118,7 @@ mod tests {
     #[test]
     fn test_no_healthy_volumes() {
         let manager = PlacementManager::new(256, 3);
-        
+
         let volumes = vec![
             mock_volume("vol-1", NodeState::Dead),
             mock_volume("vol-2", NodeState::Dead),

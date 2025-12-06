@@ -10,13 +10,13 @@ pub async fn verify_cluster(
     concurrency: usize,
 ) -> Result<VerifyReport> {
     tracing::info!("Starting cluster verification (deep={})", deep);
-    
+
     // TODO: Implement verification logic:
     // 1. Fetch all keys from coordinator metadata
     // 2. For each key, check replicas exist on volumes
     // 3. If deep=true, verify checksums
     // 4. Report missing, corrupted, or orphaned blobs
-    
+
     Ok(VerifyReport {
         total_keys: 0,
         healthy: 0,

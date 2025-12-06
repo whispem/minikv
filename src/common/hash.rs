@@ -165,7 +165,11 @@ mod tests {
     #[test]
     fn test_hrw_hash_consistent() {
         let key = "my-key";
-        let nodes = vec!["node1".to_string(), "node2".to_string(), "node3".to_string()];
+        let nodes = vec![
+            "node1".to_string(),
+            "node2".to_string(),
+            "node3".to_string(),
+        ];
 
         let sorted1 = hrw_hash(key, &nodes);
         let sorted2 = hrw_hash(key, &nodes);
@@ -176,7 +180,11 @@ mod tests {
 
     #[test]
     fn test_hrw_hash_different_keys() {
-        let nodes = vec!["node1".to_string(), "node2".to_string(), "node3".to_string()];
+        let nodes = vec![
+            "node1".to_string(),
+            "node2".to_string(),
+            "node3".to_string(),
+        ];
 
         let sorted1 = hrw_hash("key1", &nodes);
         let sorted2 = hrw_hash("key2", &nodes);
@@ -216,13 +224,20 @@ mod tests {
         ring.assign_shard(1, nodes.clone());
 
         assert_eq!(ring.get_shard_nodes(0), Some(nodes.as_slice()));
-        assert_eq!(ring.get_nodes("key-maps-to-shard-0"), Some(nodes.as_slice()));
+        assert_eq!(
+            ring.get_nodes("key-maps-to-shard-0"),
+            Some(nodes.as_slice())
+        );
     }
 
     #[test]
     fn test_rebalance() {
         let mut ring = ConsistentHashRing::new(4);
-        let nodes = vec!["node1".to_string(), "node2".to_string(), "node3".to_string()];
+        let nodes = vec![
+            "node1".to_string(),
+            "node2".to_string(),
+            "node3".to_string(),
+        ];
 
         ring.rebalance(&nodes, 2);
 

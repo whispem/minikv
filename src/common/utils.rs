@@ -149,7 +149,12 @@ where
         match f().await {
             Ok(result) => return Ok(result),
             Err(e) if e.is_retryable() && attempt < max_retries - 1 => {
-                tracing::warn!("Retry attempt {} failed: {}, retrying in {:?}", attempt + 1, e, delay);
+                tracing::warn!(
+                    "Retry attempt {} failed: {}, retrying in {:?}",
+                    attempt + 1,
+                    e,
+                    delay
+                );
                 tokio::time::sleep(delay).await;
                 delay *= 2; // Exponential backoff
             }
@@ -222,11 +227,26 @@ mod tests {
 
     #[test]
     fn test_parse_duration() {
-        assert_eq!(parse_duration("500ms").unwrap(), std::time::Duration::from_millis(500));
-        assert_eq!(parse_duration("30s").unwrap(), std::time::Duration::from_secs(30));
-        assert_eq!(parse_duration("5m").unwrap(), std::time::Duration::from_secs(300));
-        assert_eq!(parse_duration("1h").unwrap(), std::time::Duration::from_secs(3600));
-        assert_eq!(parse_duration("7d").unwrap(), std::time::Duration::from_secs(604800));
+        assert_eq!(
+            parse_duration("500ms").unwrap(),
+            std::time::Duration::from_millis(500)
+        );
+        assert_eq!(
+            parse_duration("30s").unwrap(),
+            std::time::Duration::from_secs(30)
+        );
+        assert_eq!(
+            parse_duration("5m").unwrap(),
+            std::time::Duration::from_secs(300)
+        );
+        assert_eq!(
+            parse_duration("1h").unwrap(),
+            std::time::Duration::from_secs(3600)
+        );
+        assert_eq!(
+            parse_duration("7d").unwrap(),
+            std::time::Duration::from_secs(604800)
+        );
     }
 
     #[test]
