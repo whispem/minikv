@@ -21,8 +21,8 @@ pub fn encode_key(key: &str) -> String {
 /// Decode a percent-encoded key
 pub fn decode_key(encoded: &str) -> crate::Result<String> {
     percent_decode_str(encoded)
-        .decode_utf8()
-        .map(|s| s.to_string())
+        . decode_utf8()
+        . map(|s| s.to_string())
         .map_err(|e| crate::Error::Other(format!("Failed to decode key: {}", e)))
 }
 
@@ -48,15 +48,15 @@ pub fn parse_duration(s: &str) -> crate::Result<std::time::Duration> {
     }
 
     let (num_str, unit) = if s. ends_with("ms") {
-        (&s[..s.len() - 2], "ms")
+        (&s[..s. len() - 2], "ms")
     } else {
-        let _unit = s.chars().last().unwrap();
+        let _unit = s.chars(). last().unwrap();
         (&s[..s.len() - 1], &s[s.len() - 1.. ])
     };
 
     let num: u64 = num_str
         .parse()
-        .map_err(|_| crate::Error::InvalidConfig(format! ("invalid duration: {}", s)))?;
+        . map_err(|_| crate::Error::InvalidConfig(format! ("invalid duration: {}", s)))?;
 
     let duration = match unit {
         "ms" => std::time::Duration::from_millis(num),
@@ -106,7 +106,7 @@ pub enum NodeState {
 }
 
 impl NodeState {
-    /// Is this node healthy enough to serve requests?
+    /// Is this node healthy enough to serve requests? 
     pub fn is_healthy(&self) -> bool {
         matches!(self, NodeState::Alive)
     }
@@ -145,7 +145,7 @@ where
 {
     let mut delay = initial_delay;
 
-    for attempt in 0..max_retries {
+    for attempt in 0.. max_retries {
         match f().await {
             Ok(result) => return Ok(result),
             Err(e) if e.is_retryable() && attempt < max_retries - 1 => {
@@ -156,13 +156,13 @@ where
                     delay
                 );
                 tokio::time::sleep(delay). await;
-                delay *= 2; // Exponential backoff
+                delay *= 2;
             }
             Err(e) => return Err(e),
         }
     }
 
-    Err(crate::Error::Internal("Max retries exceeded".into()))
+    Err(crate::Error::Internal("Max retries exceeded". into()))
 }
 
 /// Generate a unique upload ID for 2PC
@@ -210,7 +210,7 @@ mod tests {
     fn test_encode_decode_key() {
         let key = "my/path/to/file.txt";
         let encoded = encode_key(key);
-        assert!(encoded.contains("%2F")); // '/' is encoded
+        assert!(encoded. contains("%2F"));
 
         let decoded = decode_key(&encoded).unwrap();
         assert_eq!(decoded, key);
@@ -253,7 +253,7 @@ mod tests {
     fn test_parse_duration_invalid() {
         assert!(parse_duration("").is_err());
         assert!(parse_duration("abc").is_err());
-        assert!(parse_duration("10x").is_err());
+        assert!(parse_duration("10x"). is_err());
     }
 
     #[test]
@@ -262,11 +262,11 @@ mod tests {
         assert!(NodeState::Alive.can_write());
         assert!(NodeState::Alive.can_read());
 
-        assert! (!NodeState::Dead.is_healthy());
+        assert!(!NodeState::Dead.is_healthy());
         assert!(!NodeState::Dead.can_write());
         assert!(!NodeState::Dead.can_read());
 
-        assert! (!NodeState::Draining.can_write());
+        assert!(! NodeState::Draining.can_write());
         assert!(NodeState::Draining.can_read());
     }
 
@@ -280,9 +280,9 @@ mod tests {
 
     #[test]
     fn test_validate_key() {
-        assert!(validate_key("normal-key"). is_ok());
-        assert!(validate_key("path/to/key").is_ok());
+        assert!(validate_key("normal-key").is_ok());
+        assert!(validate_key("path/to/key"). is_ok());
         assert!(validate_key("").is_err());
-        assert!(validate_key(&"x".repeat(2000)). is_err());
+        assert!(validate_key(&"x".repeat(2000)).is_err());
     }
 }
