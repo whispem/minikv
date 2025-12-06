@@ -1,4 +1,4 @@
-//! Hashing utilities for minikv
+//!  Hashing utilities for minikv
 //!
 //! - BLAKE3 for content addressing (checksums, etags)
 //! - HRW (Highest Random Weight) for consistent placement
@@ -43,22 +43,22 @@ impl Default for Blake3Hasher {
 
 /// Compute shard ID for a key (consistent hashing)
 pub fn shard_key(key: &str, num_shards: u64) -> u64 {
-    let hash = blake3::hash(key.as_bytes());
-    let hash_u64 = u64::from_le_bytes(hash.as_bytes()[0..8].try_into().unwrap());
+    let hash = blake3::hash(key. as_bytes());
+    let hash_u64 = u64::from_le_bytes(hash. as_bytes()[0..8].try_into().unwrap());
     hash_u64 % num_shards
 }
 
 /// HRW (Highest Random Weight) hashing for replica placement
 ///
 /// Given a key and a set of nodes, returns nodes sorted by their weight
-/// (deterministic based on key). This ensures consistent placement even
+/// (deterministic based on key).  This ensures consistent placement even
 /// as the cluster changes.
 pub fn hrw_hash(key: &str, nodes: &[String]) -> Vec<String> {
     let mut weights: Vec<(String, u64)> = nodes
         .iter()
         .map(|node| {
             let combined = format!("{}{}", key, node);
-            let hash = blake3::hash(combined.as_bytes());
+            let hash = blake3::hash(combined. as_bytes());
             let weight = u64::from_le_bytes(hash.as_bytes()[0..8].try_into().unwrap());
             (node.clone(), weight)
         })
@@ -91,7 +91,7 @@ pub fn blob_prefix(key: &str) -> (String, String) {
 /// Maps keys to shards, and shards to nodes. Supports rebalancing
 /// when nodes are added/removed.
 pub struct ConsistentHashRing {
-    num_shards: u64,
+    pub num_shards: u64,
     shard_to_nodes: HashMap<u64, Vec<String>>,
 }
 
@@ -105,13 +105,13 @@ impl ConsistentHashRing {
 
     /// Assign a shard to specific nodes
     pub fn assign_shard(&mut self, shard: u64, nodes: Vec<String>) {
-        self.shard_to_nodes.insert(shard, nodes);
+        self. shard_to_nodes.insert(shard, nodes);
     }
 
     /// Get nodes responsible for a key
     pub fn get_nodes(&self, key: &str) -> Option<&[String]> {
         let shard = shard_key(key, self.num_shards);
-        self.shard_to_nodes.get(&shard).map(|v| v.as_slice())
+        self.shard_to_nodes.get(&shard). map(|v| v.as_slice())
     }
 
     /// Get nodes for a specific shard
@@ -124,7 +124,7 @@ impl ConsistentHashRing {
         for shard in 0..self.num_shards {
             let shard_key = format!("shard-{}", shard);
             let nodes = select_replicas(&shard_key, available_nodes, replicas);
-            self.shard_to_nodes.insert(shard, nodes);
+            self.shard_to_nodes. insert(shard, nodes);
         }
     }
 
@@ -133,7 +133,7 @@ impl ConsistentHashRing {
         self.shard_to_nodes
             .iter()
             .filter_map(|(shard, nodes)| {
-                if nodes.contains(&node.to_string()) {
+                if nodes.contains(&node. to_string()) {
                     Some(*shard)
                 } else {
                     None
@@ -151,7 +151,7 @@ mod tests {
     fn test_blake3_hash() {
         let data = b"hello world";
         let hash = blake3_hash(data);
-        assert_eq!(hash.len(), 64); // BLAKE3 produces 32 bytes = 64 hex chars
+        assert_eq!(hash. len(), 64); // BLAKE3 produces 32 bytes = 64 hex chars
     }
 
     #[test]
@@ -167,7 +167,7 @@ mod tests {
         let key = "my-key";
         let nodes = vec![
             "node1".to_string(),
-            "node2".to_string(),
+            "node2". to_string(),
             "node3".to_string(),
         ];
 
@@ -197,31 +197,31 @@ mod tests {
     fn test_select_replicas() {
         let key = "test-key";
         let nodes = vec![
-            "node1".to_string(),
+            "node1". to_string(),
             "node2".to_string(),
             "node3".to_string(),
             "node4".to_string(),
         ];
 
         let replicas = select_replicas(key, &nodes, 2);
-        assert_eq!(replicas.len(), 2);
+        assert_eq!(replicas. len(), 2);
     }
 
     #[test]
     fn test_blob_prefix() {
         let key = "my-blob-key";
         let (aa, bb) = blob_prefix(key);
-        assert_eq!(aa.len(), 2);
+        assert_eq!(aa. len(), 2);
         assert_eq!(bb.len(), 2);
     }
 
     #[test]
     fn test_consistent_hash_ring() {
         let mut ring = ConsistentHashRing::new(256);
-        let nodes = vec!["node1".to_string(), "node2".to_string()];
+        let nodes = vec! ["node1".to_string(), "node2".to_string()];
 
         ring.assign_shard(0, nodes.clone());
-        ring.assign_shard(1, nodes.clone());
+        ring. assign_shard(1, nodes.clone());
 
         assert_eq!(ring.get_shard_nodes(0), Some(nodes.as_slice()));
         assert_eq!(
@@ -235,7 +235,7 @@ mod tests {
         let mut ring = ConsistentHashRing::new(4);
         let nodes = vec![
             "node1".to_string(),
-            "node2".to_string(),
+            "node2". to_string(),
             "node3".to_string(),
         ];
 
@@ -243,7 +243,7 @@ mod tests {
 
         // All shards should have 2 replicas
         for shard in 0..4 {
-            let assigned = ring.get_shard_nodes(shard).unwrap();
+            let assigned = ring.get_shard_nodes(shard). unwrap();
             assert_eq!(assigned.len(), 2);
         }
     }
