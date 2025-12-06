@@ -84,4 +84,3 @@ pub struct BlobStoreStats {
     pub total_keys: usize,
     pub total_bytes: u64,
 }
-
