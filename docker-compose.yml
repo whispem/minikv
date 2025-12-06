@@ -1,0 +1,182 @@
+version: '3.8'
+
+services:
+  # Coordinator 1 (Raft leader)
+  coord-1:
+    build:
+      context: .
+      dockerfile: Dockerfile.coordinator
+    container_name: minikv-coord-1
+    ports:
+      - "5000:5000"  # HTTP API
+      - "5001:5001"  # gRPC internal
+    environment:
+      - NODE_ID=coord-1
+      - HTTP_BIND=0.0.0.0:5000
+      - GRPC_BIND=0.0.0.0:5001
+      - DB_PATH=/data/coord
+      - PEERS=coord-2:5003,coord-3:5005
+      - REPLICAS=3
+    volumes:
+      - coord1-data:/data
+    networks:
+      - minikv-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # Coordinator 2 (Raft follower)
+  coord-2:
+    build:
+      context: .
+      dockerfile: Dockerfile.coordinator
+    container_name: minikv-coord-2
+    ports:
+      - "5002:5000"
+      - "5003:5001"
+    environment:
+      - NODE_ID=coord-2
+      - HTTP_BIND=0.0.0.0:5000
+      - GRPC_BIND=0.0.0.0:5001
+      - DB_PATH=/data/coord
+      - PEERS=coord-1:5001,coord-3:5005
+      - REPLICAS=3
+    volumes:
+      - coord2-data:/data
+    networks:
+      - minikv-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # Coordinator 3 (Raft follower)
+  coord-3:
+    build:
+      context: .
+      dockerfile: Dockerfile.coordinator
+    container_name: minikv-coord-3
+    ports:
+      - "5004:5000"
+      - "5005:5001"
+    environment:
+      - NODE_ID=coord-3
+      - HTTP_BIND=0.0.0.0:5000
+      - GRPC_BIND=0.0.0.0:5001
+      - DB_PATH=/data/coord
+      - PEERS=coord-1:5001,coord-2:5003
+      - REPLICAS=3
+    volumes:
+      - coord3-data:/data
+    networks:
+      - minikv-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # Volume 1
+  volume-1:
+    build:
+      context: .
+      dockerfile: Dockerfile.volume
+    container_name: minikv-volume-1
+    ports:
+      - "6000:6000"  # HTTP API
+      - "6001:6001"  # gRPC internal
+    environment:
+      - VOLUME_ID=vol-1
+      - HTTP_BIND=0.0.0.0:6000
+      - GRPC_BIND=0.0.0.0:6001
+      - DATA_PATH=/data/blobs
+      - WAL_PATH=/data/wal
+      - COORDINATORS=http://coord-1:5000
+    volumes:
+      - vol1-data:/data
+    networks:
+      - minikv-net
+    restart: unless-stopped
+    depends_on:
+      - coord-1
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # Volume 2
+  volume-2:
+    build:
+      context: .
+      dockerfile: Dockerfile.volume
+    container_name: minikv-volume-2
+    ports:
+      - "6002:6000"
+      - "6003:6001"
+    environment:
+      - VOLUME_ID=vol-2
+      - HTTP_BIND=0.0.0.0:6000
+      - GRPC_BIND=0.0.0.0:6001
+      - DATA_PATH=/data/blobs
+      - WAL_PATH=/data/wal
+      - COORDINATORS=http://coord-1:5000
+    volumes:
+      - vol2-data:/data
+    networks:
+      - minikv-net
+    restart: unless-stopped
+    depends_on:
+      - coord-1
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # Volume 3
+  volume-3:
+    build:
+      context: .
+      dockerfile: Dockerfile.volume
+    container_name: minikv-volume-3
+    ports:
+      - "6004:6000"
+      - "6005:6001"
+    environment:
+      - VOLUME_ID=vol-3
+      - HTTP_BIND=0.0.0.0:6000
+      - GRPC_BIND=0.0.0.0:6001
+      - DATA_PATH=/data/blobs
+      - WAL_PATH=/data/wal
+      - COORDINATORS=http://coord-1:5000
+    volumes:
+      - vol3-data:/data
+    networks:
+      - minikv-net
+    restart: unless-stopped
+    depends_on:
+      - coord-1
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+volumes:
+  coord1-data:
+  coord2-data:
+  coord3-data:
+  vol1-data:
+  vol2-data:
+  vol3-data:
+
+networks:
+  minikv-net:
+    driver: bridge
