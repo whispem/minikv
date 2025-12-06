@@ -1,4 +1,4 @@
-//! Utility functions for minikv
+//!  Utility functions for minikv
 
 use percent_encoding::{percent_decode_str, utf8_percent_encode, AsciiSet, CONTROLS};
 use serde::{Deserialize, Serialize};
@@ -6,8 +6,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Percent-encoding set for keys (includes /, %, and control chars)
 const KEY_ENCODE_SET: &AsciiSet = &CONTROLS
-    .add(b'/')
-    .add(b'%')
+    . add(b'/')
+    . add(b'%')
     .add(b' ')
     .add(b'?')
     .add(b'#')
@@ -47,11 +47,11 @@ pub fn parse_duration(s: &str) -> crate::Result<std::time::Duration> {
         return Err(crate::Error::InvalidConfig("empty duration".into()));
     }
 
-    let (num_str, unit) = if s. ends_with("ms") {
+    let (num_str, unit) = if s.ends_with("ms") {
         (&s[..s. len() - 2], "ms")
     } else {
-        let _unit = s. chars().last().unwrap();
-        (&s[..s. len() - 1], &s[s.len() - 1.. ])
+        let _unit = s.chars(). last().unwrap();
+        (&s[..s.len() - 1], &s[s.len() - 1.. ])
     };
 
     let num: u64 = num_str
@@ -80,14 +80,14 @@ pub fn timestamp_now() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
-        . as_secs()
+        .as_secs()
 }
 
 /// Get current Unix timestamp (milliseconds)
 pub fn timestamp_now_millis() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .unwrap()
+        . unwrap()
         .as_millis() as u64
 }
 
@@ -150,7 +150,7 @@ where
             Ok(result) => return Ok(result),
             Err(e) if e.is_retryable() && attempt < max_retries - 1 => {
                 tracing::warn!(
-                    "Retry attempt {} failed: {}, retrying in {:?}",
+                    "Retry attempt {} failed: {}, retrying in {:? }",
                     attempt + 1,
                     e,
                     delay
@@ -182,8 +182,8 @@ pub fn crc32(data: &[u8]) -> u32 {
 
 /// Validate key (must be non-empty, reasonable length)
 pub fn validate_key(key: &str) -> crate::Result<()> {
-    if key.is_empty() {
-        return Err(crate::Error::InvalidConfig("key cannot be empty".into()));
+    if key. is_empty() {
+        return Err(crate::Error::InvalidConfig("key cannot be empty". into()));
     }
 
     if key.len() > 1024 {
@@ -222,13 +222,13 @@ mod tests {
         assert_eq!(format_bytes(1023), "1023.00 B");
         assert_eq!(format_bytes(1024), "1.00 KB");
         assert_eq!(format_bytes(1024 * 1024), "1.00 MB");
-        assert_eq!(format_bytes(1024 * 1024 * 1024), "1.00 GB");
+        assert_eq!(format_bytes(1024 * 1024 * 1024), "1. 00 GB");
     }
 
     #[test]
     fn test_parse_duration() {
         assert_eq!(
-            parse_duration("500ms"). unwrap(),
+            parse_duration("500ms").unwrap(),
             std::time::Duration::from_millis(500)
         );
         assert_eq!(
@@ -253,7 +253,7 @@ mod tests {
     fn test_parse_duration_invalid() {
         assert!(parse_duration("").is_err());
         assert!(parse_duration("abc").is_err());
-        assert!(parse_duration("10x").is_err());
+        assert!(parse_duration("10x"). is_err());
     }
 
     #[test]
@@ -262,11 +262,11 @@ mod tests {
         assert!(NodeState::Alive.can_write());
         assert!(NodeState::Alive.can_read());
 
-        assert! (!NodeState::Dead.is_healthy());
+        assert!(!NodeState::Dead.is_healthy());
         assert!(!NodeState::Dead.can_write());
-        assert!(! NodeState::Dead.can_read());
+        assert! (!NodeState::Dead.can_read());
 
-        assert! (!NodeState::Draining.can_write());
+        assert!(!NodeState::Draining.can_write());
         assert!(NodeState::Draining.can_read());
     }
 
@@ -283,6 +283,6 @@ mod tests {
         assert!(validate_key("normal-key").is_ok());
         assert!(validate_key("path/to/key").is_ok());
         assert!(validate_key(""). is_err());
-        assert!(validate_key(&"x". repeat(2000)).is_err());
+        assert!(validate_key(&"x".repeat(2000)).is_err());
     }
 }
