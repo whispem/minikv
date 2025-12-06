@@ -1,67 +1,82 @@
-use anyhow::Result;
-use clap::Parser;
-use minikv::volume::VolumeServer;
+//! Volume binary
+
+use clap::{Parser, Subcommand};
+use minikv::{common::VolumeConfig, VolumeServer};
 use std::path::PathBuf;
-use tracing_subscriber;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-#[derive(Parser, Debug)]
+#[derive(Parser)]
 #[command(name = "minikv-volume")]
-#[command(about = "MiniKV Volume Server - Distributed KV storage node")]
-struct Args {
-    /// Volume ID (unique identifier for this volume)
-    #[arg(short, long, default_value = "volume-1")]
-    id: String,
+#[command(about = "minikv volume server")]
+struct Cli {
+    #[command(subcommand)]
+    command: Commands,
+}
 
-    /// gRPC address to listen on
-    #[arg(short, long, default_value = "127.0.0.1:50052")]
-    addr: String,
+#[derive(Subcommand)]
+enum Commands {
+    /// Start volume server
+    Serve {
+        /// Volume ID
+        #[arg(long)]
+        id: String,
 
-    /// Coordinator gRPC address
-    #[arg(short, long, default_value = "http://127.0.0.1:50051")]
-    coordinator: String,
+        /// Bind address for HTTP
+        #[arg(long, default_value = "0.0.0.0:6000")]
+        bind: String,
 
-    /// Data directory for storage
-    #[arg(short, long, default_value = "./data/volume")]
-    data_dir: PathBuf,
+        /// Bind address for gRPC
+        #[arg(long, default_value = "0.0.0.0:6001")]
+        grpc: String,
 
-    /// Log level (trace, debug, info, warn, error)
-    #[arg(long, default_value = "info")]
-    log_level: String,
+        /// Data directory
+        #[arg(long, default_value = "./vol-data")]
+        data: PathBuf,
+
+        /// WAL directory
+        #[arg(long, default_value = "./vol-wal")]
+        wal: PathBuf,
+
+        /// Coordinator addresses (comma-separated)
+        #[arg(long, value_delimiter = ',')]
+        coordinators: Vec<String>,
+    },
 }
 
 #[tokio::main]
-async fn main() -> Result<()> {
-    let args = Args::parse();
-
-    // Initialize tracing
+async fn main() -> anyhow::Result<()> {
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| args.log_level.clone().into()),
+                .unwrap_or_else(|_| "info".into()),
         )
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    tracing::info!("Starting MiniKV Volume Server");
-    tracing::info!("Volume ID: {}", args.id);
-    tracing::info!("Listening on: {}", args.addr);
-    tracing::info!("Coordinator: {}", args.coordinator);
-    tracing::info!("Data directory: {}", args.data_dir.display());
+    let cli = Cli::parse();
 
-    // Create data directory if it doesn't exist
-    tokio::fs::create_dir_all(&args.data_dir).await?;
+    match cli.command {
+        Commands::Serve {
+            id,
+            bind,
+            grpc,
+            data,
+            wal,
+            coordinators,
+        } => {
+            let config = VolumeConfig {
+                bind_addr: bind.parse()?,
+                grpc_addr: grpc.parse()?,
+                data_path: data,
+                wal_path: wal,
+                coordinators,
+                ..Default::default()
+            };
 
-    // Create and start volume server
-    let server = VolumeServer::new(
-        args.id.clone(),
-        args.addr.clone(),
-        args.coordinator.clone(),
-        args.data_dir,
-    )
-    .await?;
-
-    // Run server
-    server.serve().await?;
+            let server = VolumeServer::new(config, id);
+            server.serve().await?;
+        }
+    }
 
     Ok(())
 }
