@@ -1,11 +1,11 @@
 //! Write-Ahead Log (WAL) implementation
 //!
-//! Ensures durability by writing operations to a log before applying them.
+//!  Ensures durability by writing operations to a log before applying them. 
 //! Format: [MAGIC][SEQUENCE][OP][KEY_LEN][VALUE_LEN][KEY][VALUE][CRC32]
 
 use crate::common::{crc32, Error, Result, WalSyncPolicy};
 use std::fs::{File, OpenOptions};
-use std::io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write};
+use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
 
 const WAL_MAGIC: [u8; 4] = [0x57, 0x41, 0x4C, 0x31]; // "WAL1"
@@ -36,7 +36,7 @@ pub struct Wal {
 impl Wal {
     /// Open or create WAL
     pub fn open(path: impl AsRef<Path>, sync_policy: WalSyncPolicy) -> Result<Self> {
-        let path = path.as_ref().to_path_buf();
+        let path = path.as_ref(). to_path_buf();
 
         // Create parent directory
         if let Some(parent) = path.parent() {
@@ -46,7 +46,7 @@ impl Wal {
         let file = OpenOptions::new()
             .create(true)
             .append(true)
-            .read(true)
+            . read(true)
             .open(&path)?;
 
         // Find last sequence number by reading entire log
@@ -65,7 +65,7 @@ impl Wal {
         let file = match File::open(path) {
             Ok(f) => f,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(0),
-            Err(e) => return Err(e.into()),
+            Err(e) => return Err(e. into()),
         };
 
         let mut reader = BufReader::new(file);
@@ -90,15 +90,15 @@ impl Wal {
         self.next_sequence += 1;
 
         self.write_entry(sequence, OP_PUT, key, Some(value))?;
-        self.maybe_sync()?;
+        self.maybe_sync()? ;
 
         Ok(sequence)
     }
 
     /// Append a DELETE operation
     pub fn append_delete(&mut self, key: &str) -> Result<u64> {
-        let sequence = self.next_sequence;
-        self.next_sequence += 1;
+        let sequence = self. next_sequence;
+        self. next_sequence += 1;
 
         self.write_entry(sequence, OP_DELETE, key, None)?;
         self.maybe_sync()?;
@@ -118,13 +118,13 @@ impl Wal {
         let val_bytes = value.unwrap_or(&[]);
 
         // Write header
-        self.writer.write_all(&WAL_MAGIC)?;
-        self.writer.write_all(&sequence.to_le_bytes())?;
+        self.writer.write_all(&WAL_MAGIC)? ;
+        self.writer.write_all(&sequence.to_le_bytes())? ;
         self.writer.write_all(&[op])?;
         self.writer
             .write_all(&(key_bytes.len() as u32).to_le_bytes())?;
         self.writer
-            .write_all(&(val_bytes.len() as u32).to_le_bytes())?;
+            .write_all(&(val_bytes.len() as u32).to_le_bytes())? ;
 
         // Write payload
         self.writer.write_all(key_bytes)?;
@@ -137,7 +137,7 @@ impl Wal {
         checksum_data.extend_from_slice(&sequence.to_le_bytes());
         checksum_data.push(op);
         checksum_data.extend_from_slice(&(key_bytes.len() as u32).to_le_bytes());
-        checksum_data.extend_from_slice(&(val_bytes.len() as u32).to_le_bytes());
+        checksum_data.extend_from_slice(&(val_bytes.len() as u32). to_le_bytes());
         checksum_data.extend_from_slice(key_bytes);
         if op == OP_PUT {
             checksum_data.extend_from_slice(val_bytes);
@@ -169,10 +169,10 @@ impl Wal {
     where
         F: FnMut(WalEntry) -> Result<()>,
     {
-        let file = match File::open(path.as_ref()) {
+        let file = match File::open(path. as_ref()) {
             Ok(f) => f,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-            Err(e) => return Err(e.into()),
+            Err(e) if e. kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(e) => return Err(e. into()),
         };
 
         let mut reader = BufReader::new(file);
@@ -226,7 +226,7 @@ impl Wal {
 
         // Read key
         let mut key_bytes = vec![0u8; key_len];
-        reader.read_exact(&mut key_bytes)?;
+        reader. read_exact(&mut key_bytes)?;
         let key =
             String::from_utf8(key_bytes).map_err(|_| Error::Wal("Invalid UTF-8 in key".into()))?;
 
@@ -241,7 +241,7 @@ impl Wal {
 
         // Read checksum
         let mut checksum_bytes = [0u8; 4];
-        reader.read_exact(&mut checksum_bytes)?;
+        reader. read_exact(&mut checksum_bytes)?;
         let stored_checksum = u32::from_le_bytes(checksum_bytes);
 
         // Verify checksum
@@ -339,7 +339,7 @@ mod tests {
         assert_eq!(entries[1].sequence, 1);
         assert_eq!(entries[2].sequence, 2);
 
-        match &entries[0].op {
+        match &entries[0]. op {
             WalOp::Put { key, value } => {
                 assert_eq!(key, "key1");
                 assert_eq!(value, b"value1");
@@ -351,12 +351,12 @@ mod tests {
     #[test]
     fn test_wal_reopen() {
         let dir = tempdir().unwrap();
-        let wal_path = dir.path().join("reopen.wal");
+        let wal_path = dir. path().join("reopen.wal");
 
         {
             let mut wal = Wal::open(&wal_path, WalSyncPolicy::Always).unwrap();
-            wal.append_put("key1", b"value1").unwrap();
-            wal.append_put("key2", b"value2").unwrap();
+            wal.append_put("key1", b"value1"). unwrap();
+            wal. append_put("key2", b"value2").unwrap();
             wal.sync().unwrap();
         }
 
