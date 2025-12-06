@@ -1,4 +1,4 @@
-//! Coordinator server
+//!  Coordinator server
 
 use crate::common::{CoordinatorConfig, Result};
 use crate::coordinator::grpc::CoordGrpcService;
@@ -22,8 +22,8 @@ impl Coordinator {
         tracing::info!("Starting coordinator: {}", self.node_id);
         tracing::info!("  HTTP API: {}", self.config.bind_addr);
         tracing::info!("  gRPC API: {}", self.config.grpc_addr);
-        tracing::info!("  DB path: {}", self.config.db_path.display());
-        tracing::info!("  Replicas: {}", self.config.replicas);
+        tracing::info!("  DB path: {}", self.config.db_path. display());
+        tracing::info!("  Replicas: {}", self.config. replicas);
 
         // Initialize metadata store
         let metadata = Arc::new(MetadataStore::open(&self.config.db_path)?);
@@ -31,7 +31,7 @@ impl Coordinator {
         // Initialize placement manager
         let placement = Arc::new(Mutex::new(PlacementManager::new(
             self.config.num_shards,
-            self.config.replicas,
+            self.config. replicas,
         )));
 
         // Initialize Raft
@@ -49,14 +49,14 @@ impl Coordinator {
         // Create gRPC server
         let grpc_service = CoordGrpcService::new();
         let grpc_server = tonic::transport::Server::builder()
-            .add_service(grpc_service.into_server())
+            .add_service(grpc_service. into_server())
             .serve(self.config.grpc_addr);
 
         // Start servers
-        let http_listener = tokio::net::TcpListener::bind(self.config.bind_addr).await?;
+        let http_listener = tokio::net::TcpListener::bind(self.config.bind_addr). await?;
         let http_server = axum::serve(http_listener, http_router);
 
-        tracing::info!("✓ Coordinator ready ({})", raft.get_role());
+        tracing::info!("✓ Coordinator ready ({:?})", raft.get_role());
 
         tokio::select! {
             res = http_server => {
