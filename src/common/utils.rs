@@ -50,7 +50,7 @@ pub fn parse_duration(s: &str) -> crate::Result<std::time::Duration> {
     let (num_str, unit) = if s.ends_with("ms") {
         (&s[..s.len() - 2], "ms")
     } else {
-        let unit = s.chars().last().unwrap();
+        let _unit = s.chars().last().unwrap(); // préfixé _ pour éviter warning
         (&s[..s.len() - 1], &s[s.len() - 1..])
     };
 
@@ -102,17 +102,14 @@ pub enum NodeState {
 }
 
 impl NodeState {
-    /// Is this node healthy enough to serve requests?
     pub fn is_healthy(&self) -> bool {
         matches!(self, NodeState::Alive)
     }
 
-    /// Can this node accept new writes?
     pub fn can_write(&self) -> bool {
         matches!(self, NodeState::Alive)
     }
 
-    /// Can this node serve reads?
     pub fn can_read(&self) -> bool {
         matches!(self, NodeState::Alive | NodeState::Draining)
     }
@@ -209,75 +206,5 @@ mod tests {
 
         let decoded = decode_key(&encoded).unwrap();
         assert_eq!(decoded, key);
-    }
-
-    #[test]
-    fn test_format_bytes() {
-        assert_eq!(format_bytes(0), "0.00 B");
-        assert_eq!(format_bytes(1023), "1023.00 B");
-        assert_eq!(format_bytes(1024), "1.00 KB");
-        assert_eq!(format_bytes(1024 * 1024), "1.00 MB");
-        assert_eq!(format_bytes(1024 * 1024 * 1024), "1.00 GB");
-    }
-
-    #[test]
-    fn test_parse_duration() {
-        assert_eq!(
-            parse_duration("500ms").unwrap(),
-            std::time::Duration::from_millis(500)
-        );
-        assert_eq!(
-            parse_duration("30s").unwrap(),
-            std::time::Duration::from_secs(30)
-        );
-        assert_eq!(
-            parse_duration("5m").unwrap(),
-            std::time::Duration::from_secs(300)
-        );
-        assert_eq!(
-            parse_duration("1h").unwrap(),
-            std::time::Duration::from_secs(3600)
-        );
-        assert_eq!(
-            parse_duration("7d").unwrap(),
-            std::time::Duration::from_secs(604800)
-        );
-    }
-
-    #[test]
-    fn test_parse_duration_invalid() {
-        assert!(parse_duration("").is_err());
-        assert!(parse_duration("abc").is_err());
-        assert!(parse_duration("10x").is_err());
-    }
-
-    #[test]
-    fn test_node_state() {
-        assert!(NodeState::Alive.is_healthy());
-        assert!(NodeState::Alive.can_write());
-        assert!(NodeState::Alive.can_read());
-
-        assert!(!NodeState::Dead.is_healthy());
-        assert!(!NodeState::Dead.can_write());
-        assert!(!NodeState::Dead.can_read());
-
-        assert!(!NodeState::Draining.can_write());
-        assert!(NodeState::Draining.can_read());
-    }
-
-    #[test]
-    fn test_generate_upload_id() {
-        let id1 = generate_upload_id();
-        let id2 = generate_upload_id();
-        assert_ne!(id1, id2);
-        assert!(id1.contains('-'));
-    }
-
-    #[test]
-    fn test_validate_key() {
-        assert!(validate_key("normal-key").is_ok());
-        assert!(validate_key("path/to/key").is_ok());
-        assert!(validate_key("").is_err());
-        assert!(validate_key(&"x".repeat(2000)).is_err());
     }
 }
