@@ -1,6 +1,6 @@
 //! HTTP server for public blob access
 
-use crate::common::{decode_key, encode_key, format_bytes, Result};
+use crate::common::decode_key;
 use crate::volume::blob::BlobStore;
 use axum::{
     body::Bytes,
@@ -48,7 +48,7 @@ pub fn create_router(state: VolumeState, max_size_mb: usize) -> Router {
         .route("/stats", get(stats_handler))
         .route("/blobs/:key", post(put_blob))
         .route("/blobs/:key", get(get_blob))
-        .route("/blobs/:key", delete(delete_blob))
+        . route("/blobs/:key", delete(delete_blob))
         .layer(RequestBodyLimitLayer::new(max_size_mb * 1024 * 1024))
         .with_state(state)
 }
@@ -72,8 +72,8 @@ async fn stats_handler(State(state): State<VolumeState>) -> impl IntoResponse {
     Json(StatsResponse {
         volume_id: state.volume_id.clone(),
         total_keys: stats.total_keys,
-        total_bytes: stats.total_bytes,
-        total_mb: stats.total_bytes as f64 / (1024.0 * 1024.0),
+        total_bytes: stats. total_bytes,
+        total_mb: stats.total_bytes as f64 / (1024.0 * 1024. 0),
     })
 }
 
@@ -95,8 +95,8 @@ async fn put_blob(
         }
     };
 
-    let mut store = state.store.lock().unwrap();
-    match store.put(&key, &body) {
+    let mut store = state.store.lock(). unwrap();
+    match store. put(&key, &body) {
         Ok(loc) => (
             StatusCode::CREATED,
             Json(PutResponse {
@@ -131,9 +131,9 @@ async fn get_blob(State(state): State<VolumeState>, Path(encoded_key): Path<Stri
         }
     };
 
-    let store = state.store.lock().unwrap();
+    let store = state.store. lock().unwrap();
     match store.get(&key) {
-        Ok(Some(data)) => (StatusCode::OK, data).into_response(),
+        Ok(Some(data)) => (StatusCode::OK, data). into_response(),
         Ok(None) => (
             StatusCode::NOT_FOUND,
             Json(ErrorResponse {
@@ -164,7 +164,7 @@ async fn delete_blob(
                     error: format!("Invalid key: {}", e),
                 }),
             )
-                .into_response()
+                . into_response()
         }
     };
 
@@ -177,7 +177,7 @@ async fn delete_blob(
                 error: "Blob not found".to_string(),
             }),
         )
-            .into_response(),
+            . into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
