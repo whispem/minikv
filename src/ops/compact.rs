@@ -1,5 +1,7 @@
 //! Cluster-wide compaction
 
+#![allow(dead_code)]
+
 use crate::common::Result;
 
 pub async fn compact_cluster(
