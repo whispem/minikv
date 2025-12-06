@@ -5,15 +5,11 @@
 use crate::common::Result;
 
 pub async fn repair_cluster(
-    coordinator_url: &str,
-    replicas: usize,
-    dry_run: bool,
+    _coordinator_url: &str,
+    _replicas: usize,
+    _dry_run: bool,
 ) -> Result<RepairReport> {
-    tracing::info!(
-        "Starting cluster repair (replicas={}, dry_run={})",
-        replicas,
-        dry_run
-    );
+    tracing::info!("Starting cluster repair");
 
     // TODO: Implement repair logic:
     // 1. Fetch all keys from coordinator metadata
