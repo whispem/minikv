@@ -31,7 +31,7 @@ pub fn create_router(state: CoordState) -> Router {
         .route("/health", get(health_check))
         .route("/:key", post(put_key))
         .route("/:key", get(get_key))
-        . route("/:key", delete(delete_key))
+        .route("/:key", delete(delete_key))
         .with_state(state)
 }
 
@@ -48,7 +48,7 @@ async fn put_key(
     Path(_key): Path<String>,
     _body: Bytes,
 ) -> Response {
-    if !state. raft.is_leader() {
+    if !state.raft.is_leader() {
         return (
             StatusCode::TEMPORARY_REDIRECT,
             Json(ErrorResponse {
@@ -66,7 +66,7 @@ async fn get_key(State(state): State<CoordState>, Path(key): Path<String>) -> Re
     match state.metadata.get_key(&key) {
         Ok(Some(meta)) => {
             // TODO: Redirect to volume or proxy read
-            Json(meta). into_response()
+            Json(meta).into_response()
         }
         Ok(None) => StatusCode::NOT_FOUND.into_response(),
         Err(e) => (
@@ -80,8 +80,8 @@ async fn get_key(State(state): State<CoordState>, Path(key): Path<String>) -> Re
 }
 
 async fn delete_key(State(state): State<CoordState>, Path(_key): Path<String>) -> Response {
-    if !state. raft.is_leader() {
-        return StatusCode::TEMPORARY_REDIRECT. into_response();
+    if !state.raft.is_leader() {
+        return StatusCode::TEMPORARY_REDIRECT.into_response();
     }
 
     // TODO: Implement delete with 2PC
