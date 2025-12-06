@@ -1,6 +1,6 @@
-use std::sync::{Arc, Mutex};
-use std::path::PathBuf;
 use crate::volume::blob::BlobStore;
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 
 pub struct VolumeServer {
     store: Arc<Mutex<BlobStore>>,
