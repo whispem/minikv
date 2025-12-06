@@ -1,4 +1,4 @@
-//!  Utility functions for minikv
+//! Utility functions for minikv
 
 use percent_encoding::{percent_decode_str, utf8_percent_encode, AsciiSet, CONTROLS};
 use serde::{Deserialize, Serialize};
@@ -47,11 +47,11 @@ pub fn parse_duration(s: &str) -> crate::Result<std::time::Duration> {
         return Err(crate::Error::InvalidConfig("empty duration".into()));
     }
 
-    let (num_str, unit) = if s.ends_with("ms") {
+    let (num_str, unit) = if s. ends_with("ms") {
         (&s[..s.len() - 2], "ms")
     } else {
         let _unit = s.chars().last().unwrap();
-        (&s[..s.len() - 1], &s[s.len() - 1..])
+        (&s[..s.len() - 1], &s[s.len() - 1.. ])
     };
 
     let num: u64 = num_str
@@ -86,7 +86,7 @@ pub fn timestamp_now() -> u64 {
 /// Get current Unix timestamp (milliseconds)
 pub fn timestamp_now_millis() -> u64 {
     SystemTime::now()
-        .duration_since(UNIX_EPOCH)
+        . duration_since(UNIX_EPOCH)
         .unwrap()
         .as_millis() as u64
 }
@@ -116,7 +116,7 @@ impl NodeState {
         matches!(self, NodeState::Alive)
     }
 
-    /// Can this node serve reads?
+    /// Can this node serve reads? 
     pub fn can_read(&self) -> bool {
         matches!(self, NodeState::Alive | NodeState::Draining)
     }
@@ -182,8 +182,8 @@ pub fn crc32(data: &[u8]) -> u32 {
 
 /// Validate key (must be non-empty, reasonable length)
 pub fn validate_key(key: &str) -> crate::Result<()> {
-    if key.is_empty() {
-        return Err(crate::Error::InvalidConfig("key cannot be empty".into()));
+    if key. is_empty() {
+        return Err(crate::Error::InvalidConfig("key cannot be empty". into()));
     }
 
     if key.len() > 1024 {
@@ -208,7 +208,7 @@ mod tests {
 
     #[test]
     fn test_encode_decode_key() {
-        let key = "my/path/to/file. txt";
+        let key = "my/path/to/file.txt";
         let encoded = encode_key(key);
         assert!(encoded.contains("%2F")); // '/' is encoded
 
@@ -222,7 +222,7 @@ mod tests {
         assert_eq!(format_bytes(1023), "1023.00 B");
         assert_eq!(format_bytes(1024), "1.00 KB");
         assert_eq!(format_bytes(1024 * 1024), "1.00 MB");
-        assert_eq!(format_bytes(1024 * 1024 * 1024), "1.00 GB");
+        assert_eq!(format_bytes(1024 * 1024 * 1024), "1. 00 GB");
     }
 
     #[test]
@@ -264,7 +264,7 @@ mod tests {
 
         assert! (!NodeState::Dead.is_healthy());
         assert!(!NodeState::Dead.can_write());
-        assert!(! NodeState::Dead.can_read());
+        assert!(!NodeState::Dead.can_read());
 
         assert! (!NodeState::Draining.can_write());
         assert!(NodeState::Draining.can_read());
@@ -280,9 +280,9 @@ mod tests {
 
     #[test]
     fn test_validate_key() {
-        assert!(validate_key("normal-key").is_ok());
+        assert!(validate_key("normal-key"). is_ok());
         assert!(validate_key("path/to/key").is_ok());
-        assert!(validate_key(""). is_err());
-        assert!(validate_key(&"x".repeat(2000)).is_err());
+        assert!(validate_key("").is_err());
+        assert!(validate_key(&"x".repeat(2000)). is_err());
     }
 }
