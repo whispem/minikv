@@ -4,10 +4,7 @@
 
 use crate::common::Result;
 
-pub async fn compact_cluster(
-    _coordinator_url: &str,
-    _shard: Option<u64>,
-) -> Result<CompactReport> {
+pub async fn compact_cluster(_coordinator_url: &str, _shard: Option<u64>) -> Result<CompactReport> {
     tracing::info!("Starting cluster compaction");
 
     // TODO: Implement compaction logic:
