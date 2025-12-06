@@ -1,4 +1,4 @@
-//!  Utility functions for minikv
+//! Utility functions for minikv
 
 use percent_encoding::{percent_decode_str, utf8_percent_encode, AsciiSet, CONTROLS};
 use serde::{Deserialize, Serialize};
@@ -6,8 +6,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Percent-encoding set for keys (includes /, %, and control chars)
 const KEY_ENCODE_SET: &AsciiSet = &CONTROLS
-    . add(b'/')
-    . add(b'%')
+    .add(b'/')
+    .add(b'%')
     .add(b' ')
     .add(b'?')
     .add(b'#')
@@ -32,7 +32,7 @@ pub fn format_bytes(bytes: u64) -> String {
     let mut size = bytes as f64;
     let mut unit_idx = 0;
 
-    while size >= 1024. 0 && unit_idx < UNITS.len() - 1 {
+    while size >= 1024.0 && unit_idx < UNITS.len() - 1 {
         size /= 1024.0;
         unit_idx += 1;
     }
@@ -48,15 +48,15 @@ pub fn parse_duration(s: &str) -> crate::Result<std::time::Duration> {
     }
 
     let (num_str, unit) = if s.ends_with("ms") {
-        (&s[..s. len() - 2], "ms")
+        (&s[..s.len() - 2], "ms")
     } else {
-        let _unit = s.chars(). last().unwrap();
-        (&s[..s.len() - 1], &s[s.len() - 1.. ])
+        let unit = s.chars().last().unwrap();
+        (&s[..s.len() - 1], &s[s.len() - 1..])
     };
 
     let num: u64 = num_str
         .parse()
-        . map_err(|_| crate::Error::InvalidConfig(format! ("invalid duration: {}", s)))?;
+        .map_err(|_| crate::Error::InvalidConfig(format!("invalid duration: {}", s)))?;
 
     let duration = match unit {
         "ms" => std::time::Duration::from_millis(num),
@@ -87,7 +87,7 @@ pub fn timestamp_now() -> u64 {
 pub fn timestamp_now_millis() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        . unwrap()
+        .unwrap()
         .as_millis() as u64
 }
 
@@ -95,18 +95,14 @@ pub fn timestamp_now_millis() -> u64 {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum NodeState {
-    /// Node is healthy and serving requests
     Alive,
-    /// Node is suspected to be down (missed heartbeats)
     Suspect,
-    /// Node is confirmed down
     Dead,
-    /// Node is being decommissioned
     Draining,
 }
 
 impl NodeState {
-    /// Is this node healthy enough to serve requests? 
+    /// Is this node healthy enough to serve requests?
     pub fn is_healthy(&self) -> bool {
         matches!(self, NodeState::Alive)
     }
@@ -150,12 +146,12 @@ where
             Ok(result) => return Ok(result),
             Err(e) if e.is_retryable() && attempt < max_retries - 1 => {
                 tracing::warn!(
-                    "Retry attempt {} failed: {}, retrying in {:? }",
+                    "Retry attempt {} failed: {}, retrying in {:?}",
                     attempt + 1,
                     e,
                     delay
                 );
-                tokio::time::sleep(delay). await;
+                tokio::time::sleep(delay).await;
                 delay *= 2;
             }
             Err(e) => return Err(e),
@@ -182,8 +178,8 @@ pub fn crc32(data: &[u8]) -> u32 {
 
 /// Validate key (must be non-empty, reasonable length)
 pub fn validate_key(key: &str) -> crate::Result<()> {
-    if key. is_empty() {
-        return Err(crate::Error::InvalidConfig("key cannot be empty". into()));
+    if key.is_empty() {
+        return Err(crate::Error::InvalidConfig("key cannot be empty".into()));
     }
 
     if key.len() > 1024 {
@@ -192,7 +188,6 @@ pub fn validate_key(key: &str) -> crate::Result<()> {
         ));
     }
 
-    // Disallow control characters
     if key.chars().any(|c| c.is_control()) {
         return Err(crate::Error::InvalidConfig(
             "key contains invalid characters".into(),
@@ -208,21 +203,21 @@ mod tests {
 
     #[test]
     fn test_encode_decode_key() {
-        let key = "my/path/to/file. txt";
+        let key = "my/path/to/file.txt";
         let encoded = encode_key(key);
         assert!(encoded.contains("%2F"));
 
-        let decoded = decode_key(&encoded). unwrap();
+        let decoded = decode_key(&encoded).unwrap();
         assert_eq!(decoded, key);
     }
 
     #[test]
     fn test_format_bytes() {
-        assert_eq!(format_bytes(0), "0. 00 B");
+        assert_eq!(format_bytes(0), "0.00 B");
         assert_eq!(format_bytes(1023), "1023.00 B");
         assert_eq!(format_bytes(1024), "1.00 KB");
         assert_eq!(format_bytes(1024 * 1024), "1.00 MB");
-        assert_eq!(format_bytes(1024 * 1024 * 1024), "1. 00 GB");
+        assert_eq!(format_bytes(1024 * 1024 * 1024), "1.00 GB");
     }
 
     #[test]
@@ -253,7 +248,7 @@ mod tests {
     fn test_parse_duration_invalid() {
         assert!(parse_duration("").is_err());
         assert!(parse_duration("abc").is_err());
-        assert!(parse_duration("10x"). is_err());
+        assert!(parse_duration("10x").is_err());
     }
 
     #[test]
@@ -264,7 +259,7 @@ mod tests {
 
         assert!(!NodeState::Dead.is_healthy());
         assert!(!NodeState::Dead.can_write());
-        assert! (!NodeState::Dead.can_read());
+        assert!(!NodeState::Dead.can_read());
 
         assert!(!NodeState::Draining.can_write());
         assert!(NodeState::Draining.can_read());
@@ -282,7 +277,7 @@ mod tests {
     fn test_validate_key() {
         assert!(validate_key("normal-key").is_ok());
         assert!(validate_key("path/to/key").is_ok());
-        assert!(validate_key(""). is_err());
+        assert!(validate_key("").is_err());
         assert!(validate_key(&"x".repeat(2000)).is_err());
     }
 }
