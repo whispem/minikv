@@ -1,4 +1,4 @@
-//! Error types for minikv
+//!  Error types for minikv
 
 use thiserror::Error;
 
@@ -109,7 +109,7 @@ impl Error {
     pub fn to_grpc_status(&self) -> tonic::Status {
         use tonic::Code;
         match self {
-            Error::NotFound(_) => tonic::Status::new(Code::NotFound, self.to_string()),
+            Error::NotFound(_) => tonic::Status::new(Code::NotFound, self. to_string()),
             Error::NotLeader(leader) => {
                 let mut status = tonic::Status::new(Code::FailedPrecondition, self.to_string());
                 status
@@ -117,13 +117,13 @@ impl Error {
                     .insert("leader", leader.parse().unwrap());
                 status
             }
-            Error::InvalidConfig(_) | Error::InsufficientReplicas { .. } => {
+            Error::InvalidConfig(_) | Error::InsufficientReplicas { ..  } => {
                 tonic::Status::new(Code::InvalidArgument, self.to_string())
             }
             Error::ConsensusTimeout | Error::Timeout(_) => {
-                tonic::Status::new(Code::DeadlineExceeded, self.to_string())
+                tonic::Status::new(Code::DeadlineExceeded, self. to_string())
             }
-            Error::Grpc(status) => status.clone(),
+            Error::Grpc(status) => status. clone(),
             _ => tonic::Status::new(Code::Internal, self.to_string()),
         }
     }
@@ -159,6 +159,6 @@ impl From<String> for Error {
 
 impl From<anyhow::Error> for Error {
     fn from(e: anyhow::Error) -> Self {
-        Error::Other(e.to_string())
+        Error::Other(e. to_string())
     }
 }
