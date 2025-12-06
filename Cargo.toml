@@ -1,0 +1,101 @@
+[package]
+name = "minikv"
+version = "0.1.0"
+edition = "2021"
+authors = ["Em' <contct.whispem@gmail.com>"]
+description = "A production-grade distributed KV store with Raft consensus in ~1,500 lines"
+license = "MIT"
+repository = "https://github.com/whispem/minikv"
+keywords = ["distributed", "kv-store", "raft", "consensus", "storage"]
+categories = ["database-implementations", "network-programming"]
+rust-version = "1.75"
+
+[dependencies]
+# Async runtime
+tokio = { version = "1", features = ["rt-multi-thread", "net", "io-util", "sync", "macros", "fs", "signal", "time"] }
+
+# gRPC
+tonic = "0.12"
+prost = "0.13"
+
+# HTTP server (public API)
+axum = "0.7"
+tower = { version = "0.5", features = ["util", "timeout"] }
+tower-http = { version = "0.5", features = ["limit", "trace"] }
+
+# Metadata store
+rocksdb = "0.22"
+
+# Raft consensus
+raft = "0.7"
+raft-proto = "0.7"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+bincode = "1.3"
+
+# Crypto & hashing
+blake3 = "1.5"
+crc32fast = "1.4"
+
+# Bloom filters (from your mini-kvstore)
+bloomfilter = "3.0.1"
+sha2 = "0.10"
+
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+
+# Logging & tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Time utilities
+chrono = "0.4"
+
+# URL encoding
+percent-encoding = "2.3"
+
+# Byte utilities
+bytes = "1.11"
+
+# HTTP client (for volume pull operations)
+reqwest = { version = "0.12", features = ["stream"] }
+tokio-stream = "0.1"
+
+[build-dependencies]
+tonic-build = "0.12"
+
+[dev-dependencies]
+tempfile = "3.10"
+criterion = { version = "0.5", features = ["html_reports"] }
+tokio-test = "0.4"
+
+[features]
+default = []
+heavy-tests = []
+
+[[bin]]
+name = "minikv-coord"
+path = "src/bin/coord.rs"
+
+[[bin]]
+name = "minikv-volume"
+path = "src/bin/volume.rs"
+
+[[bin]]
+name = "minikv"
+path = "src/bin/cli.rs"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+
+[profile.bench]
+inherits = "release"
