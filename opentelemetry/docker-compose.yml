@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  # Jaeger for trace visualization
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: minikv-jaeger
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "4317:4317"    # OTLP gRPC
+      - "4318:4318"    # OTLP HTTP
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    networks:
+      - minikv-observability
+
+  # Prometheus for metrics
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: minikv-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    networks:
+      - minikv-observability
+
+  # Grafana for dashboards
+  grafana:
+    image: grafana/grafana:latest
+    container_name: minikv-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml
+    networks:
+      - minikv-observability
+    depends_on:
+      - prometheus
+      - jaeger
+
+volumes:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  minikv-observability:
+    driver: bridge
