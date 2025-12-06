@@ -1,0 +1,22 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # Coordinator metrics
+  - job_name: 'minikv-coordinator'
+    static_configs:
+      - targets:
+          - 'coord-1:5000'
+          - 'coord-2:5000'
+          - 'coord-3:5000'
+    metrics_path: '/metrics'
+
+  # Volume metrics
+  - job_name: 'minikv-volume'
+    static_configs:
+      - targets:
+          - 'volume-1:6000'
+          - 'volume-2:6000'
+          - 'volume-3:6000'
+    metrics_path: '/metrics'
