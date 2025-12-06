@@ -27,9 +27,9 @@ impl PlacementManager {
         // Filter healthy volumes
         let healthy: Vec<String> = volumes
             .iter()
-            .filter(|v| v.state. is_healthy())
+            .filter(|v| v.state.is_healthy())
             .map(|v| v.volume_id.clone())
-            . collect();
+            .collect();
 
         if healthy.is_empty() {
             return Err(crate::Error::NoHealthyVolumes);
@@ -50,14 +50,14 @@ impl PlacementManager {
 
     /// Get shard for key
     pub fn get_shard(&self, key: &str) -> u64 {
-        shard_key(key, self. num_shards)
+        shard_key(key, self.num_shards)
     }
 
     /// Rebalance shards across volumes
     pub fn rebalance(&mut self, volumes: &[VolumeMetadata]) {
         let available: Vec<String> = volumes
             .iter()
-            .filter(|v| v.state. is_healthy())
+            .filter(|v| v.state.is_healthy())
             .map(|v| v.volume_id.clone())
             .collect();
 
@@ -66,7 +66,7 @@ impl PlacementManager {
 
     /// Get volumes for a specific shard
     pub fn get_shard_volumes(&self, shard: u64) -> Option<Vec<String>> {
-        self.ring. get_shard_nodes(shard). map(|nodes| nodes.to_vec())
+        self.ring.get_shard_nodes(shard).map(|nodes| nodes.to_vec())
     }
 }
 
@@ -100,7 +100,7 @@ mod tests {
             mock_volume("vol-4", NodeState::Alive),
         ];
 
-        let selected = manager. select_volumes("test-key", &volumes). unwrap();
+        let selected = manager.select_volumes("test-key", &volumes).unwrap();
         assert_eq!(selected.len(), 3);
     }
 
