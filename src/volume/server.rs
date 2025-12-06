@@ -1,163 +1,76 @@
-use anyhow::Result;
-use std::path::PathBuf;
-use std::sync::Arc;
-use tokio::sync::RwLock;
-use tonic::{transport::Server, Request, Response, Status};
+//! Volume server
 
-/// Volume server that handles storage operations
+use crate::common::{Result, VolumeConfig};
+use crate::volume::blob::BlobStore;
+use crate::volume::compaction::CompactionManager;
+use crate::volume::grpc::VolumeGrpcService;
+use crate::volume::http::{create_router, VolumeState};
+use std::sync::{Arc, Mutex};
+
 pub struct VolumeServer {
-    id: String,
-    addr: String,
-    coordinator_addr: String,
-    data_dir: PathBuf,
-    storage: Arc<RwLock<VolumeStorage>>,
-}
-
-/// Internal storage implementation
-struct VolumeStorage {
-    db: rocksdb::DB,
+    config: VolumeConfig,
+    volume_id: String,
 }
 
 impl VolumeServer {
-    /// Create a new volume server
-    pub async fn new(
-        id: String,
-        addr: String,
-        coordinator_addr: String,
-        data_dir: PathBuf,
-    ) -> Result<Self> {
-        tracing::info!("Initializing volume storage at {:?}", data_dir);
-
-        // Create data directory
-        tokio::fs::create_dir_all(&data_dir).await?;
-
-        // Open RocksDB
-        let db_path = data_dir.join("db");
-        let mut opts = rocksdb::Options::default();
-        opts.create_if_missing(true);
-        opts.set_compression_type(rocksdb::DBCompressionType::Lz4);
-
-        let db = rocksdb::DB::open(&opts, db_path)?;
-
-        let storage = Arc::new(RwLock::new(VolumeStorage { db }));
-
-        Ok(Self {
-            id,
-            addr,
-            coordinator_addr,
-            data_dir,
-            storage,
-        })
+    pub fn new(config: VolumeConfig, volume_id: String) -> Self {
+        Self { config, volume_id }
     }
 
-    /// Start the gRPC server
     pub async fn serve(self) -> Result<()> {
-        let addr = self.addr.parse()?;
+        tracing::info!("Starting volume server: {}", self.volume_id);
+        tracing::info!("  HTTP API: {}", self.config.bind_addr);
+        tracing::info!("  gRPC API: {}", self.config.grpc_addr);
+        tracing::info!("  Data path: {}", self.config.data_path.display());
+        tracing::info!("  WAL path: {}", self.config.wal_path.display());
 
-        tracing::info!("Volume server {} listening on {}", self.id, addr);
+        // Initialize blob store
+        let store = Arc::new(Mutex::new(BlobStore::open(
+            &self.config.data_path,
+            &self.config.wal_path,
+            self.config.wal_sync,
+        )?));
 
-        // Register with coordinator
-        self.register_with_coordinator().await?;
+        // Start background compaction
+        let compaction = CompactionManager::new(
+            store.clone(),
+            self.config.compaction_interval_secs,
+            self.config.compaction_threshold,
+        );
+        let _compaction_handle = compaction.start();
 
-        // Start gRPC server
-        Server::builder()
-            .add_service(self.into_service())
-            .serve(addr)
-            .await?;
+        // Create HTTP server
+        let http_state = VolumeState {
+            store: store.clone(),
+            volume_id: self.volume_id.clone(),
+        };
+        let http_router = create_router(http_state, self.config.max_blob_size as usize / (1024 * 1024));
+
+        // Create gRPC server
+        let grpc_service = VolumeGrpcService::new(store, self.volume_id.clone());
+        let grpc_server = tonic::transport::Server::builder()
+            .add_service(grpc_service.into_server())
+            .serve(self.config.grpc_addr);
+
+        // Start servers
+        let http_listener = tokio::net::TcpListener::bind(self.config.bind_addr).await?;
+        let http_server = axum::serve(http_listener, http_router);
+
+        tracing::info!("✓ Volume server ready");
+
+        tokio::select! {
+            res = http_server => {
+                if let Err(e) = res {
+                    tracing::error!("HTTP server error: {}", e);
+                }
+            }
+            res = grpc_server => {
+                if let Err(e) = res {
+                    tracing::error!("gRPC server error: {}", e);
+                }
+            }
+        }
 
         Ok(())
-    }
-
-    /// Register this volume with the coordinator
-    async fn register_with_coordinator(&self) -> Result<()> {
-        tracing::info!("Registering with coordinator at {}", self.coordinator_addr);
-
-        // TODO: Implement actual gRPC call to coordinator
-        // For now, just log the registration
-        tracing::info!("Volume {} registered successfully", self.id);
-
-        Ok(())
-    }
-
-    /// Convert into gRPC service (placeholder for actual implementation)
-    fn into_service(self) -> tonic::transport::server::Router {
-        // TODO: Implement actual gRPC service
-        // This is a placeholder that returns an empty router
-        Server::builder()
-    }
-
-    /// Put a key-value pair
-    pub async fn put(&self, key: Vec<u8>, value: Vec<u8>) -> Result<()> {
-        let storage = self.storage.write().await;
-        storage.db.put(key, value)?;
-        Ok(())
-    }
-
-    /// Get a value by key
-    pub async fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        let storage = self.storage.read().await;
-        Ok(storage.db.get(key)?)
-    }
-
-    /// Delete a key
-    pub async fn delete(&self, key: &[u8]) -> Result<()> {
-        let storage = self.storage.write().await;
-        storage.db.delete(key)?;
-        Ok(())
-    }
-
-    /// Check if volume is healthy
-    pub async fn health_check(&self) -> bool {
-        // Simple health check: can we read from DB?
-        self.storage.read().await.db.get(b"__health__").is_ok()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use tempfile::TempDir;
-
-    #[tokio::test]
-    async fn test_volume_basic_ops() {
-        let temp_dir = TempDir::new().unwrap();
-        let server = VolumeServer::new(
-            "test-volume".to_string(),
-            "127.0.0.1:50052".to_string(),
-            "http://127.0.0.1:50051".to_string(),
-            temp_dir.path().to_path_buf(),
-        )
-        .await
-        .unwrap();
-
-        // Test put
-        server
-            .put(b"key1".to_vec(), b"value1".to_vec())
-            .await
-            .unwrap();
-
-        // Test get
-        let value = server.get(b"key1").await.unwrap();
-        assert_eq!(value, Some(b"value1".to_vec()));
-
-        // Test delete
-        server.delete(b"key1").await.unwrap();
-        let value = server.get(b"key1").await.unwrap();
-        assert_eq!(value, None);
-    }
-
-    #[tokio::test]
-    async fn test_health_check() {
-        let temp_dir = TempDir::new().unwrap();
-        let server = VolumeServer::new(
-            "test-volume".to_string(),
-            "127.0.0.1:50053".to_string(),
-            "http://127.0.0.1:50051".to_string(),
-            temp_dir.path().to_path_buf(),
-        )
-        .await
-        .unwrap();
-
-        assert!(server.health_check().await);
     }
 }
