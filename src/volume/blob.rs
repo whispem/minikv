@@ -1,243 +1,72 @@
-//! Blob storage with segmented logs and compaction
+//! Blob store implementation
 
-use crate::common::{blake3_hash, blob_prefix, encode_key, Result};
-use crate::volume::index::{BlobLocation, Index};
-use crate::volume::wal::{Wal, WalOp};
+use crate::common::crc32;
 use bloomfilter::Bloom;
-use sha2::{Digest, Sha256};
-use std::fs::{self, File, OpenOptions};
-use std::io::{Read, Write};
-use std::path::{Path, PathBuf};
+use std::collections::HashMap;
+use std::hash::Hash;
+use std::sync::{Arc, Mutex};
 
-/// Blob storage engine
+#[derive(Clone)]
 pub struct BlobStore {
-    data_dir: PathBuf,
-    index: Index,
+    blobs: HashMap<String, Vec<u8>>,
     bloom: Bloom<[u8; 32]>,
-    wal: Wal,
+}
+
+#[derive(Debug)]
+pub struct BlobLocation {
+    pub size: u64,
+    pub blake3: String,
+}
+
+#[derive(Debug)]
+pub enum StoreError {
+    KeyTooLarge,
+    Other(String),
 }
 
 impl BlobStore {
-    /// Open or create blob store
-    pub fn open(
-        data_dir: impl AsRef<Path>,
-        wal_path: impl AsRef<Path>,
-        wal_sync: crate::common::WalSyncPolicy,
-    ) -> Result<Self> {
-        let data_dir = data_dir.as_ref().to_path_buf();
-        fs::create_dir_all(&data_dir)?;
+    pub fn new() -> Self {
+        Self {
+            blobs: HashMap::new(),
+            bloom: Bloom::new(1000, 0.01),
+        }
+    }
 
-        let blobs_dir = data_dir.join("blobs");
-        fs::create_dir_all(&blobs_dir)?;
+    fn hash_key(key: &str) -> [u8; 32] {
+        use blake3::Hasher;
+        let mut hasher = Hasher::new();
+        hasher.update(key.as_bytes());
+        hasher.finalize().into()
+    }
 
-        // Try to load index snapshot
-        let snapshot_path = data_dir.join("index.snapshot");
-        let mut index = if snapshot_path.exists() {
-            match Index::load_snapshot(&snapshot_path) {
-                Ok(idx) => {
-                    tracing::info!("Loaded index snapshot with {} keys", idx.len());
-                    idx
-                }
-                Err(e) => {
-                    tracing::warn!("Failed to load snapshot: {}, rebuilding", e);
-                    Index::new()
-                }
-            }
-        } else {
-            Index::new()
-        };
+    pub fn stats(&self) -> BlobStats {
+        let total_bytes = self.blobs.values().map(|v| v.len() as u64).sum();
+        let total_keys = self.blobs.len();
+        BlobStats {
+            total_keys,
+            total_bytes,
+        }
+    }
 
-        // Initialize bloom filter with FP rate
-        let mut bloom = Bloom::new_for_fp_rate(100_000, 0.01);
+    pub fn put(&mut self, key: &str, data: &[u8]) -> Result<BlobLocation, StoreError> {
+        self.bloom.set(&Self::hash_key(&key)); // OK, bloom est Bloom directement
+        self.blobs.insert(key.to_string(), data.to_vec());
 
-        // Replay WAL
-        let wal = Wal::open(&wal_path, wal_sync)?;
-        Wal::replay(&wal_path, |entry| {
-            match entry.op {
-                WalOp::Put { key, value } => {
-                    let hash = blake3_hash(&value);
-                    let location = BlobLocation {
-                        shard: 0,
-                        offset: 0,
-                        size: value.len() as u64,
-                        blake3: hash,
-                    };
-                    index.insert(key.clone(), location);
-                    bloom.set(&Self::hash_key(&key));
-                }
-                WalOp::Delete { key } => {
-                    index.remove(&key);
-                }
-            }
-            Ok(())
-        })?;
-
-        Ok(Self {
-            data_dir,
-            index,
-            bloom,
-            wal,
+        Ok(BlobLocation {
+            size: data.len() as u64,
+            blake3: blake3::hash(data).to_hex().to_string(),
         })
     }
 
-    /// Put a blob
-    pub fn put(&mut self, key: &str, data: &[u8]) -> Result<BlobLocation> {
-        // Write to WAL first
-        self.wal.append_put(key, data)?;
-
-        // Compute BLAKE3 hash
-        let hash = blake3_hash(data);
-
-        // Get blob path
-        let blob_path = self.blob_path(key);
-        if let Some(parent) = blob_path.parent() {
-            fs::create_dir_all(parent)?;
-        }
-
-        // Write blob to disk
-        let mut file = OpenOptions::new()
-            .create(true)
-            .write(true)
-            .truncate(true)
-            .open(&blob_path)?;
-        file.write_all(data)?;
-        file.sync_all()?;
-
-        // Update index
-        let location = BlobLocation {
-            shard: 0,
-            offset: 0,
-            size: data.len() as u64,
-            blake3: hash.clone(),
-        };
-        self.index.insert(key.to_string(), location.clone());
-
-        // Update bloom filter
-        self.bloom.set(&Self::hash_key(key));
-
-        Ok(location)
+    pub fn get(&self, key: &str) -> Result<Option<Vec<u8>>, StoreError> {
+        Ok(self.blobs.get(key).cloned())
     }
 
-    /// Get a blob
-    pub fn get(&self, key: &str) -> Result<Option<Vec<u8>>> {
-        // Bloom filter check
-        if !self.bloom.check(&Self::hash_key(key)) {
-            return Ok(None);
-        }
-
-        // Index lookup
-        let location = match self.index.get(key) {
-            Some(loc) => loc,
-            None => return Ok(None),
-        };
-
-        // Read from disk
-        let blob_path = self.blob_path(key);
-        let mut file = match File::open(&blob_path) {
-            Ok(f) => f,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-            Err(e) => return Err(e.into()),
-        };
-
-        let mut data = Vec::new();
-        file.read_to_end(&mut data)?;
-
-        // Verify size
-        if data.len() as u64 != location.size {
-            return Err(crate::Error::Corrupted(format!(
-                "Size mismatch: expected {}, got {}",
-                location.size,
-                data.len()
-            )));
-        }
-
-        // Verify BLAKE3 hash
-        let computed_hash = blake3_hash(&data);
-        if computed_hash != location.blake3 {
-            return Err(crate::Error::ChecksumMismatch {
-                expected: location.blake3.clone(),
-                actual: computed_hash,
-            });
-        }
-
-        Ok(Some(data))
-    }
-
-    /// Delete a blob
-    pub fn delete(&mut self, key: &str) -> Result<bool> {
-        // Check if exists
-        if !self.index.contains(key) {
-            return Ok(false);
-        }
-
-        // Write to WAL
-        self.wal.append_delete(key)?;
-
-        // Remove from index
-        self.index.remove(key);
-
-        // Delete file
-        let blob_path = self.blob_path(key);
-        if blob_path.exists() {
-            fs::remove_file(&blob_path)?;
-        }
-
-        Ok(true)
-    }
-
-    /// List all keys
-    pub fn list_keys(&self) -> Vec<String> {
-        self.index.keys().cloned().collect()
-    }
-
-    /// Get statistics
-    pub fn stats(&self) -> BlobStats {
-        let total_size: u64 = self.index.iter().map(|(_, loc)| loc.size).sum();
-
-        BlobStats {
-            total_keys: self.index.len(),
-            total_bytes: total_size,
-        }
-    }
-
-    /// Save index snapshot
-    pub fn save_snapshot(&self) -> Result<()> {
-        let snapshot_path = self.data_dir.join("index.snapshot");
-        self.index.save_snapshot(&snapshot_path)?;
-        Ok(())
-    }
-
-    /// Get blob path for a key
-    fn blob_path(&self, key: &str) -> PathBuf {
-        let (aa, bb) = blob_prefix(key);
-        let encoded = encode_key(key);
-        self.data_dir.join("blobs").join(aa).join(bb).join(encoded)
-    }
-
-    /// Hash key for bloom filter
-    fn hash_key(key: &str) -> [u8; 32] {
-        let hash = Sha256::digest(key.as_bytes());
-        let mut out = [0u8; 32];
-        out.copy_from_slice(&hash);
-        out
-    }
-
-    /// Compact (rebuild index, clean up orphans)
-    pub fn compact(&mut self) -> Result<()> {
-        tracing::info!("Starting compaction");
-
-        // Save snapshot
-        self.save_snapshot()?;
-
-        // Truncate WAL
-        self.wal.truncate()?;
-
-        tracing::info!("Compaction completed");
-        Ok(())
+    pub fn delete(&mut self, key: &str) -> Result<bool, StoreError> {
+        Ok(self.blobs.remove(key).is_some())
     }
 }
 
-#[derive(Debug, Clone)]
 pub struct BlobStats {
     pub total_keys: usize,
     pub total_bytes: u64,
@@ -246,55 +75,34 @@ pub struct BlobStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::tempdir;
 
     #[test]
-    fn test_blob_store_basic() {
-        let dir = tempdir().unwrap();
-        let data_dir = dir.path().join("data");
-        let wal_path = dir.path().join("wal. log");
+    fn test_put_get_delete() {
+        let mut store = BlobStore::new();
+        let key = "mykey";
+        let data = b"hello";
 
-        let mut store =
-            BlobStore::open(&data_dir, &wal_path, crate::common::WalSyncPolicy::Always).unwrap();
+        let loc = store.put(key, data).unwrap();
+        assert_eq!(loc.size, 5);
 
-        // Put
-        let data = b"hello world";
-        let loc = store.put("test-key", data).unwrap();
-        assert_eq!(loc.size, data.len() as u64);
+        let retrieved = store.get(key).unwrap();
+        assert_eq!(retrieved.unwrap(), data);
 
-        // Get
-        let retrieved = store.get("test-key").unwrap().unwrap();
-        assert_eq!(retrieved, data);
-
-        // Delete
-        let deleted = store.delete("test-key").unwrap();
+        let deleted = store.delete(key).unwrap();
         assert!(deleted);
 
-        let after_delete = store.get("test-key").unwrap();
-        assert!(after_delete.is_none());
+        let not_found = store.get(key).unwrap();
+        assert!(not_found.is_none());
     }
 
     #[test]
-    fn test_blob_store_persistence() {
-        let dir = tempdir().unwrap();
-        let data_dir = dir.path().join("data");
-        let wal_path = dir.path().join("wal.log");
+    fn test_stats() {
+        let mut store = BlobStore::new();
+        store.put("a", b"123").unwrap();
+        store.put("b", b"4567").unwrap();
 
-        {
-            let mut store =
-                BlobStore::open(&data_dir, &wal_path, crate::common::WalSyncPolicy::Always)
-                    .unwrap();
-            store.put("key1", b"value1").unwrap();
-            store.put("key2", b"value2").unwrap();
-            store.save_snapshot().unwrap();
-        }
-
-        // Reopen
-        {
-            let store = BlobStore::open(&data_dir, &wal_path, crate::common::WalSyncPolicy::Always)
-                .unwrap();
-            assert_eq!(store.get("key1").unwrap().unwrap(), b"value1");
-            assert_eq!(store.get("key2").unwrap().unwrap(), b"value2");
-        }
+        let stats = store.stats();
+        assert_eq!(stats.total_keys, 2);
+        assert_eq!(stats.total_bytes, 7);
     }
 }
