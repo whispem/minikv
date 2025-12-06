@@ -45,8 +45,8 @@ async fn health_check(State(state): State<CoordState>) -> impl IntoResponse {
 
 async fn put_key(
     State(state): State<CoordState>,
-    Path(key): Path<String>,
-    body: Bytes,
+    Path(_key): Path<String>,
+    _body: Bytes,
 ) -> Response {
     if !state.raft.is_leader() {
         return (
@@ -79,7 +79,7 @@ async fn get_key(State(state): State<CoordState>, Path(key): Path<String>) -> Re
     }
 }
 
-async fn delete_key(State(state): State<CoordState>, Path(key): Path<String>) -> Response {
+async fn delete_key(State(state): State<CoordState>, Path(_key): Path<String>) -> Response {
     if !state.raft.is_leader() {
         return StatusCode::TEMPORARY_REDIRECT.into_response();
     }
