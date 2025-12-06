@@ -193,7 +193,7 @@ pub fn validate_key(key: &str) -> crate::Result<()> {
     }
 
     // Disallow control characters
-    if key.chars().any(|c| c. is_control()) {
+    if key.chars().any(|c| c.is_control()) {
         return Err(crate::Error::InvalidConfig(
             "key contains invalid characters".into(),
         ));
