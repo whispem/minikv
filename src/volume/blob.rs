@@ -25,9 +25,9 @@ impl BlobStore {
         wal_sync: crate::common::WalSyncPolicy,
     ) -> Result<Self> {
         let data_dir = data_dir.as_ref().to_path_buf();
-        fs::create_dir_all(&data_dir)? ;
+        fs::create_dir_all(&data_dir)?;
 
-        let blobs_dir = data_dir. join("blobs");
+        let blobs_dir = data_dir.join("blobs");
         fs::create_dir_all(&blobs_dir)?;
 
         // Try to load index snapshot
@@ -35,7 +35,7 @@ impl BlobStore {
         let mut index = if snapshot_path.exists() {
             match Index::load_snapshot(&snapshot_path) {
                 Ok(idx) => {
-                    tracing::info! ("Loaded index snapshot with {} keys", idx.len());
+                    tracing::info!("Loaded index snapshot with {} keys", idx.len());
                     idx
                 }
                 Err(e) => {
@@ -53,7 +53,7 @@ impl BlobStore {
         // Replay WAL
         let wal = Wal::open(&wal_path, wal_sync)?;
         Wal::replay(&wal_path, |entry| {
-            match entry. op {
+            match entry.op {
                 WalOp::Put { key, value } => {
                     let hash = blake3_hash(&value);
                     let location = BlobLocation {
@@ -91,26 +91,26 @@ impl BlobStore {
         // Get blob path
         let blob_path = self.blob_path(key);
         if let Some(parent) = blob_path.parent() {
-            fs::create_dir_all(parent)? ;
+            fs::create_dir_all(parent)?;
         }
 
         // Write blob to disk
         let mut file = OpenOptions::new()
             .create(true)
             .write(true)
-            . truncate(true)
-            . open(&blob_path)?;
+            .truncate(true)
+            .open(&blob_path)?;
         file.write_all(data)?;
-        file.sync_all()? ;
+        file.sync_all()?;
 
         // Update index
         let location = BlobLocation {
             shard: 0,
             offset: 0,
             size: data.len() as u64,
-            blake3: hash. clone(),
+            blake3: hash.clone(),
         };
-        self.index.insert(key.to_string(), location. clone());
+        self.index.insert(key.to_string(), location.clone());
 
         // Update bloom filter
         self.bloom.set(&Self::hash_key(key));
@@ -121,7 +121,7 @@ impl BlobStore {
     /// Get a blob
     pub fn get(&self, key: &str) -> Result<Option<Vec<u8>>> {
         // Bloom filter check
-        if !self. bloom.check(&Self::hash_key(key)) {
+        if !self.bloom.check(&Self::hash_key(key)) {
             return Ok(None);
         }
 
@@ -136,17 +136,17 @@ impl BlobStore {
         let mut file = match File::open(&blob_path) {
             Ok(f) => f,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-            Err(e) => return Err(e. into()),
+            Err(e) => return Err(e.into()),
         };
 
         let mut data = Vec::new();
-        file.read_to_end(&mut data)? ;
+        file.read_to_end(&mut data)?;
 
         // Verify size
         if data.len() as u64 != location.size {
             return Err(crate::Error::Corrupted(format!(
                 "Size mismatch: expected {}, got {}",
-                location. size,
+                location.size,
                 data.len()
             )));
         }
@@ -155,7 +155,7 @@ impl BlobStore {
         let computed_hash = blake3_hash(&data);
         if computed_hash != location.blake3 {
             return Err(crate::Error::ChecksumMismatch {
-                expected: location.blake3. clone(),
+                expected: location.blake3.clone(),
                 actual: computed_hash,
             });
         }
@@ -166,7 +166,7 @@ impl BlobStore {
     /// Delete a blob
     pub fn delete(&mut self, key: &str) -> Result<bool> {
         // Check if exists
-        if !self.index. contains(key) {
+        if !self.index.contains(key) {
             return Ok(false);
         }
 
@@ -174,7 +174,7 @@ impl BlobStore {
         self.wal.append_delete(key)?;
 
         // Remove from index
-        self.index. remove(key);
+        self.index.remove(key);
 
         // Delete file
         let blob_path = self.blob_path(key);
@@ -187,12 +187,12 @@ impl BlobStore {
 
     /// List all keys
     pub fn list_keys(&self) -> Vec<String> {
-        self. index.keys().cloned().collect()
+        self.index.keys().cloned().collect()
     }
 
     /// Get statistics
     pub fn stats(&self) -> BlobStats {
-        let total_size: u64 = self.index. iter().map(|(_, loc)| loc.size).sum();
+        let total_size: u64 = self.index.iter().map(|(_, loc)| loc.size).sum();
 
         BlobStats {
             total_keys: self.index.len(),
@@ -230,7 +230,7 @@ impl BlobStore {
         self.save_snapshot()?;
 
         // Truncate WAL
-        self.wal. truncate()?;
+        self.wal.truncate()?;
 
         tracing::info!("Compaction completed");
         Ok(())
@@ -263,7 +263,7 @@ mod tests {
         assert_eq!(loc.size, data.len() as u64);
 
         // Get
-        let retrieved = store.get("test-key").unwrap(). unwrap();
+        let retrieved = store.get("test-key").unwrap().unwrap();
         assert_eq!(retrieved, data);
 
         // Delete
@@ -277,15 +277,15 @@ mod tests {
     #[test]
     fn test_blob_store_persistence() {
         let dir = tempdir().unwrap();
-        let data_dir = dir.path(). join("data");
-        let wal_path = dir.path(). join("wal.log");
+        let data_dir = dir.path().join("data");
+        let wal_path = dir.path().join("wal.log");
 
         {
             let mut store =
                 BlobStore::open(&data_dir, &wal_path, crate::common::WalSyncPolicy::Always)
                     .unwrap();
             store.put("key1", b"value1").unwrap();
-            store.put("key2", b"value2"). unwrap();
+            store.put("key2", b"value2").unwrap();
             store.save_snapshot().unwrap();
         }
 
@@ -293,8 +293,8 @@ mod tests {
         {
             let store = BlobStore::open(&data_dir, &wal_path, crate::common::WalSyncPolicy::Always)
                 .unwrap();
-            assert_eq!(store.get("key1").unwrap(). unwrap(), b"value1");
-            assert_eq!(store. get("key2").unwrap(). unwrap(), b"value2");
+            assert_eq!(store.get("key1").unwrap().unwrap(), b"value1");
+            assert_eq!(store.get("key2").unwrap().unwrap(), b"value2");
         }
     }
 }
