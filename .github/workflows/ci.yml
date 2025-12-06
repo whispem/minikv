@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop]
 
 env:
   CARGO_TERM_COLOR: always
@@ -12,32 +12,40 @@ env:
 
 jobs:
   check:
-    name: Check & Test
+    name: Rust Check & Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-      
-      - name: Install dependencies
+
+      - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y protobuf-compiler librocksdb-dev
-      
-      - name: Format code (auto-fix)
-        run: cargo fmt --all
-      
-      - name: Run clippy
+
+      - name: Format code (check only)
+        run: cargo fmt --all -- --check
+
+      - name: Run Clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
-      
-      - name: Build
+
+      - name: Build project
         run: cargo build --all-targets --release
-      
-      - name: Test
-        run: cargo test --all --release
+
+      - name: Run tests (skip benchmarks)
+        run: cargo test --all --release -- --skip bench
 
   docker:
     name: Docker Build
@@ -45,18 +53,18 @@ jobs:
     needs: check
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      
-      - name: Build coordinator
+
+      - name: Build coordinator Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
           file: Dockerfile.coordinator
           tags: minikv-coord:latest
-      
-      - name: Build volume
+
+      - name: Build volume Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
