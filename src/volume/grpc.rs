@@ -7,7 +7,6 @@ use crate::proto::{
     StatsRequest, StatsResponse,
 };
 use crate::volume::blob::BlobStore;
-use bytes::Bytes;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
@@ -62,13 +61,13 @@ impl VolumeInternal for VolumeGrpcService {
 
         // Check if we have enough space (simplified - just check)
         let store = self.store.lock().unwrap();
-        let stats = store.stats();
+        let _stats = store.stats();
         drop(store);
 
         // Store upload state
         let state = UploadState {
             key: req.key.clone(),
-            expected_size: req.expected_size,
+            expected_size: req. expected_size,
             expected_blake3: req.expected_blake3,
             data: Vec::with_capacity(req.expected_size as usize),
         };
@@ -76,9 +75,9 @@ impl VolumeInternal for VolumeGrpcService {
         self.uploads
             .lock()
             .unwrap()
-            .insert(req.upload_id.clone(), state);
+            . insert(req.upload_id. clone(), state);
 
-        tracing::debug!("PREPARE OK: {}", req.upload_id);
+        tracing::debug! ("PREPARE OK: {}", req.upload_id);
 
         Ok(Response::new(PrepareResponse {
             ok: true,
@@ -92,11 +91,11 @@ impl VolumeInternal for VolumeGrpcService {
     ) -> Result<Response<CommitResponse>, Status> {
         let req = request.into_inner();
 
-        tracing::debug!("COMMIT: upload_id={}, key={}", req.upload_id, req.key);
+        tracing::debug! ("COMMIT: upload_id={}, key={}", req.upload_id, req.key);
 
         // Get upload state
         let state = {
-            let mut uploads = self.uploads.lock().unwrap();
+            let mut uploads = self. uploads.lock().unwrap();
             match uploads.remove(&req.upload_id) {
                 Some(s) => s,
                 None => {
@@ -110,7 +109,7 @@ impl VolumeInternal for VolumeGrpcService {
         };
 
         // Verify size
-        if state.data.len() as u64 != state.expected_size {
+        if state. data.len() as u64 != state.expected_size {
             tracing::error!(
                 "COMMIT FAILED: size mismatch {} vs {}",
                 state.data.len(),
@@ -141,7 +140,7 @@ impl VolumeInternal for VolumeGrpcService {
         }
 
         // Write to store
-        let mut store = self.store.lock().unwrap();
+        let mut store = self.store.lock(). unwrap();
         match store.put(&state.key, &state.data) {
             Ok(_) => {
                 tracing::info!("COMMIT OK: {} ({} bytes)", state.key, state.data.len());
@@ -151,7 +150,7 @@ impl VolumeInternal for VolumeGrpcService {
                 }))
             }
             Err(e) => {
-                tracing::error!("COMMIT FAILED: {}", e);
+                tracing::error! ("COMMIT FAILED: {}", e);
                 Ok(Response::new(CommitResponse {
                     ok: false,
                     error: e.to_string(),
@@ -168,7 +167,7 @@ impl VolumeInternal for VolumeGrpcService {
 
         tracing::debug!("ABORT: upload_id={}", req.upload_id);
 
-        self.uploads.lock().unwrap().remove(&req.upload_id);
+        self.uploads. lock().unwrap().remove(&req.upload_id);
 
         Ok(Response::new(AbortResponse { ok: true }))
     }
@@ -205,7 +204,7 @@ impl VolumeInternal for VolumeGrpcService {
                     Ok(bytes) => {
                         if tx
                             .send(Ok(Chunk {
-                                data: bytes.to_vec(),
+                                data: bytes. to_vec(),
                             }))
                             .await
                             .is_err()
@@ -279,7 +278,7 @@ impl VolumeInternal for VolumeGrpcService {
             total_keys: stats.total_keys as u64,
             total_bytes: stats.total_bytes,
             free_bytes,
-            shards: vec![], // TODO: Implement sharding
+            shards: vec! [], // TODO: Implement sharding
         }))
     }
 }
