@@ -26,18 +26,35 @@ impl CoordGrpcService {
 impl CoordinatorInternal for CoordGrpcService {
     async fn request_vote(
         &self,
-        _req: Request<VoteRequest>,
+        req: Request<VoteRequest>,
     ) -> Result<Response<VoteResponse>, Status> {
-        // TODO: Implement Raft RequestVote RPC
-        Err(Status::unimplemented("RequestVote not implemented"))
+        let vote_req = req.into_inner();
+        // TODO: Intégrer la logique réelle avec RaftNode
+        // Pour l'exemple, on accorde le vote si le terme est au moins égal
+        let current_term = 1; // À remplacer par le vrai terme du noeud
+        let vote_granted = vote_req.term >= current_term;
+        let resp = VoteResponse {
+            term: current_term,
+            vote_granted,
+        };
+        Ok(Response::new(resp))
     }
 
     async fn append_entries(
         &self,
-        _req: Request<AppendRequest>,
+        req: Request<AppendRequest>,
     ) -> Result<Response<AppendResponse>, Status> {
-        // TODO: Implement Raft AppendEntries RPC
-        Err(Status::unimplemented("AppendEntries not implemented"))
+        let append_req = req.into_inner();
+        // TODO: Intégrer la logique réelle avec RaftNode
+        // Pour l'exemple, on accepte si le terme est au moins égal
+        let current_term = 1; // À remplacer par le vrai terme du noeud
+        let success = append_req.term >= current_term;
+        let resp = AppendResponse {
+            term: current_term,
+            success,
+            conflict_index: 0,
+        };
+        Ok(Response::new(resp))
     }
 
     async fn install_snapshot(

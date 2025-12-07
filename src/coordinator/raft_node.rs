@@ -31,9 +31,90 @@ pub struct RaftNode {
     term: Arc<Mutex<u64>>,
     voted_for: Arc<Mutex<Option<String>>>,
     leader_id: Arc<Mutex<Option<String>>>,
+    log: Arc<Mutex<Vec<crate::common::raft::LogEntry>>>,
 }
 
 impl RaftNode {
+    /// Accès public au log pour les tests
+    pub fn get_log(&self) -> std::sync::MutexGuard<'_, Vec<crate::common::raft::LogEntry>> {
+        self.log.lock().unwrap()
+    }
+    /// Envoi des heartbeats (AppendEntries vides) aux followers
+    pub async fn send_heartbeats(&self) {
+        // TODO: envoyer AppendEntries (heartbeat) à tous les peers via gRPC
+    }
+    /// Traiter une requête RequestVote reçue
+    pub fn handle_request_vote(&self, req: crate::common::raft::VoteRequest) -> crate::common::raft::VoteResponse {
+        let mut term = self.term.lock().unwrap();
+        let mut voted_for = self.voted_for.lock().unwrap();
+        let current_term = *term;
+        let mut vote_granted = false;
+
+        if req.term < current_term {
+            vote_granted = false;
+        } else {
+            if req.term > current_term {
+                *term = req.term;
+                *voted_for = None;
+            }
+            if voted_for.is_none() || voted_for.as_ref() == Some(&req.candidate_id) {
+                *voted_for = Some(req.candidate_id.clone());
+                vote_granted = true;
+            }
+        }
+        crate::common::raft::VoteResponse {
+            term: *term,
+            vote_granted,
+        }
+    }
+
+    /// Traiter une requête AppendEntries reçue
+    pub fn handle_append_entries(&self, req: crate::common::raft::AppendRequest) -> crate::common::raft::AppendResponse {
+        let mut term = self.term.lock().unwrap();
+        let current_term = *term;
+        let mut log = self.log.lock().unwrap();
+        let mut conflict_index = 0;
+        let success = if req.term < current_term {
+            false
+        } else {
+            if req.term > current_term {
+                *term = req.term;
+            }
+            if req.prev_log_index as usize <= log.len() {
+                for entry in req.entries {
+                    log.push(entry);
+                }
+                true
+            } else {
+                conflict_index = log.len() as u64;
+                false
+            }
+        };
+        crate::common::raft::AppendResponse {
+            term: *term,
+            success,
+            conflict_index,
+        }
+    }
+
+    /// Démarrer une élection et collecter les votes
+    pub async fn start_election_and_collect_votes(&self, peers: Vec<String>) -> bool {
+        let new_term = self.start_election();
+        let mut votes = 1; // On vote pour soi-même
+        // TODO: envoyer RequestVote à tous les peers via gRPC
+        // Simuler la majorité pour l'exemple
+        if !peers.is_empty() {
+            votes += peers.len();
+        }
+        let majority = peers.len().div_ceil(2);
+        if votes >= majority {
+            self.become_leader();
+            true
+        } else {
+            self.step_down(new_term, None);
+            false
+        }
+    }
     pub fn new(node_id: String) -> Self {
         Self {
             node_id,
@@ -41,6 +122,7 @@ impl RaftNode {
             term: Arc::new(Mutex::new(0)),
             voted_for: Arc::new(Mutex::new(None)),
             leader_id: Arc::new(Mutex::new(None)),
+            log: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -131,17 +213,29 @@ impl RaftNode {
 /// Start Raft background tasks (heartbeats, elections)
 pub fn start_raft_tasks(node: Arc<RaftNode>) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
-        // For single-node testing, just become leader immediately
-        node.become_leader();
-        tracing::info!("Raft node {} is now leader", node.node_id);
-
-        // In production, this would:
-        // - Send heartbeats to followers
-        // - Handle election timeouts
-        // - Manage log replication
+        // Raft main loop: handle timeouts, elections, heartbeats
+        let mut last_heartbeat = tokio::time::Instant::now();
+        let mut election_timeout = tokio::time::Duration::from_millis(150 + rand::random::<u64>() % 150);
 
         loop {
-            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+            tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+
+            // If follower and no heartbeat received, start election
+            if !node.is_leader() && last_heartbeat.elapsed() > election_timeout {
+                tracing::info!("Node {} starting election", node.node_id);
+                node.start_election();
+                // TODO: Send RequestVote RPCs to other nodes
+                // TODO: Collect votes and become leader if majority
+                // TODO: Reset election timeout
+                election_timeout = tokio::time::Duration::from_millis(150 + rand::random::<u64>() % 150);
+                last_heartbeat = tokio::time::Instant::now();
+            }
+
+            // If leader, send heartbeats
+            if node.is_leader() {
+                // TODO: Send AppendEntries (heartbeat) RPCs to followers
+                last_heartbeat = tokio::time::Instant::now();
+            }
         }
     })
 }
