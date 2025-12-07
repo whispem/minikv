@@ -235,6 +235,7 @@ curl http://localhost:5000/health
 
 ### Write Path (2PC with Strong Consistency)
 
+```
 Client → PUT /my-key (1MB blob)
   ↓
 Coordinator (Raft Leader)
