@@ -1,9 +1,6 @@
 //! Integration tests for minikv
 
-use minikv::{
-    common::WalSyncPolicy,
-    volume::blob::BlobStore,
-};
+use minikv::{common::WalSyncPolicy, volume::blob::BlobStore};
 use tempfile::TempDir;
 
 #[test]
