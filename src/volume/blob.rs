@@ -1,12 +1,11 @@
 //! Blob storage with segmented append-only logs
 //!
-//! Architecture:
-//! - Segmented storage: data/00/ab/key.blob
-//! - In-memory index: HashMap<String, BlobLocation>
-//! - Bloom filter for fast negative lookups
-//! - WAL for durability
-//! - Index snapshots for fast restarts
-
+//! Simplified layout:
+//! - Segments stored under `data/segments/seg_0000.blob`
+//! - In-memory index: Index
+//! - Bloom filter for fast negative lookups (stores raw blake3 32-byte digest)
+//! - WAL for durability of delete/put intent (replay applies deletes; index locations come from snapshots or scanning segments)
+//! - Snapshot for fast restarts
 use crate::common::{blake3_hash, blob_prefix, crc32, Result, WalSyncPolicy};
 use crate::volume::index::{BlobLocation, Index};
 use crate::volume::wal::{Wal, WalOp};
@@ -15,19 +14,16 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
-const BLOB_MAGIC: [u8; 4] = [0x42, 0x4C, 0x4F, 0x42]; // "BLOB"
-const SEGMENT_SIZE: u64 = 64 * 1024 * 1024; // 64 MB per segment
+const BLOB_MAGIC: [u8; 4] = [0x42, 0x4C, 0x4F, 0x42];
+const SEGMENT_SIZE: u64 = 64 * 1024 * 1024;
 const MAX_SEGMENTS: u64 = 1000;
 
-/// Blob record format:
-/// [MAGIC:4][KEY_LEN:4][VALUE_LEN:8][KEY:n][VALUE:m][CRC32:4]
 #[derive(Debug)]
 struct BlobRecord {
     key: String,
     value: Vec<u8>,
 }
 
-/// Blob storage statistics
 #[derive(Debug, Clone)]
 pub struct StoreStats {
     pub total_keys: usize,
@@ -37,7 +33,6 @@ pub struct StoreStats {
     pub bloom_false_positives: u64,
 }
 
-/// Blob store with WAL and index
 pub struct BlobStore {
     data_path: PathBuf,
     wal_path: PathBuf,
@@ -50,69 +45,67 @@ pub struct BlobStore {
 }
 
 impl BlobStore {
-    /// Open or create blob store
     pub fn open(data_path: &Path, wal_path: &Path, sync_policy: WalSyncPolicy) -> Result<Self> {
-        // Create directories
         fs::create_dir_all(data_path)?;
         fs::create_dir_all(wal_path)?;
 
-        // Try to load index snapshot
+        let segments_dir = data_path.join("segments");
+        fs::create_dir_all(&segments_dir)?;
+
         let snapshot_path = data_path.join("index.snap");
         let mut index = if snapshot_path.exists() {
             tracing::info!("Loading index snapshot from {:?}", snapshot_path);
             Index::load_snapshot(&snapshot_path)?
         } else {
-            tracing::info!("Building index from segments");
+            tracing::info!("No snapshot, building index from segments");
             Index::new()
         };
 
-        // Initialize bloom filter
-        let mut bloom: Bloom<[u8; 32]> =
-            Bloom::new_for_fp_rate(100_000, 0.01).expect("Failed to create bloom filter");
-
-        // Open WAL
-        let wal_file = wal_path.join("wal.log");
-        let mut wal = Wal::open(&wal_file, sync_policy)?;
-
-        // Replay WAL entries
-        tracing::info!("Replaying WAL from {:?}", wal_file);
-        Wal::replay(&wal_file, |entry| {
-            match entry.op {
-                WalOp::Put { ref key, ref value } => {
-                    // WAL replay: we don't have the actual location yet
-                    // This is just to update the bloom filter
-                    let hash = blake3_hash(key.as_bytes());
-                    let hash_bytes: [u8; 32] = hex::decode(&hash)
-                        .unwrap_or_else(|_| vec![0u8; 32])
-                        .try_into()
-                        .unwrap_or([0u8; 32]);
-                    bloom.set(&hash_bytes);
-                }
-                WalOp::Delete { ref key } => {
-                    index.remove(key);
-                }
-            }
-            Ok(())
-        })?;
-
-        // Rebuild index from segments if snapshot is old or missing
-        if !snapshot_path.exists() {
-            Self::rebuild_index_from_segments(&mut index, &mut bloom, data_path)?;
+        let bloom_path = data_path.join("bloom.filter");
+        let mut bloom = if bloom_path.exists() {
+            let mut f = File::open(&bloom_path)?;
+            let mut bytes = Vec::new();
+            f.read_to_end(&mut bytes)?;
+            Bloom::from_bytes(&bytes).unwrap_or_else(|_| {
+                Bloom::new_for_fp_rate(100_000, 0.01).expect("Failed to create bloom filter")
+            })
         } else {
-            // Update bloom filter from index
+            Bloom::new_for_fp_rate(100_000, 0.01).expect("Failed to create bloom filter")
+        };
+
+        // If no snapshot, rebuild index (and bloom) by scanning segments.
+        if !snapshot_path.exists() {
+            Self::rebuild_index_from_segments(&mut index, &mut bloom, &segments_dir)?;
+        } else {
+            // Ensure bloom matches index keys.
             for key in index.keys() {
                 let hash = blake3_hash(key.as_bytes());
-                let hash_bytes: [u8; 32] = hex::decode(&hash)
-                    .unwrap_or_else(|_| vec![0u8; 32])
-                    .try_into()
-                    .unwrap_or([0u8; 32]);
+                let mut hash_bytes = [0u8; 32];
+                let raw = hex::decode(&hash).unwrap_or_else(|_| vec![0u8; 32]);
+                hash_bytes.copy_from_slice(&raw[..32]);
                 bloom.set(&hash_bytes);
             }
         }
 
-        // Find current segment and offset
-        let (current_segment, current_offset) = Self::find_current_position(data_path)?;
+        // Open wal and replay deletes only (we don't have locations in WAL to reconstruct index)
+        let wal_file = wal_path.join("wal.log");
+        let mut wal = Wal::open(&wal_file, sync_policy)?;
+        if wal_file.exists() {
+            tracing::info!("Replaying WAL (applying deletes) {:?}", wal_file);
+            Wal::replay(&wal_file, |entry| {
+                match entry.op {
+                    WalOp::Delete { ref key } => {
+                        index.remove(key);
+                    }
+                    WalOp::Put { .. } => {
+                        // Put operations in WAL may not contain segment location; ignore
+                    }
+                }
+                Ok(())
+            })?;
+        }
 
+        let (current_segment, current_offset) = Self::find_current_position(&segments_dir)?;
         tracing::info!(
             "BlobStore opened: {} keys, segment {}, offset {}",
             index.len(),
@@ -132,89 +125,83 @@ impl BlobStore {
         })
     }
 
-    /// Put a blob
     pub fn put(&mut self, key: &str, value: &[u8]) -> Result<()> {
-        // Append to WAL first (durability)
         self.wal.append_put(key, value)?;
 
-        // Update bloom filter
         let hash = blake3_hash(key.as_bytes());
-        let hash_bytes: [u8; 32] = hex::decode(&hash)
-            .unwrap_or_else(|_| vec![0u8; 32])
-            .try_into()
-            .unwrap_or([0u8; 32]);
+        let mut hash_bytes = [0u8; 32];
+        let raw = hex::decode(&hash).unwrap_or_else(|_| vec![0u8; 32]);
+        hash_bytes.copy_from_slice(&raw[..32]);
         self.bloom.set(&hash_bytes);
 
-        // Write to segment
         let location = self.write_blob(key, value)?;
-
-        // Update index
         self.index.insert(key.to_string(), location);
+
+        if self.sync_policy == WalSyncPolicy::Always {
+            let bloom_path = self.data_path.join("bloom.filter");
+            let mut f = OpenOptions::new().create(true).write(true).truncate(true).open(&bloom_path)?;
+            let bytes = self.bloom.to_bytes();
+            f.write_all(&bytes)?;
+            f.sync_all()?;
+        }
 
         Ok(())
     }
 
-    /// Get a blob
     pub fn get(&self, key: &str) -> Result<Option<Vec<u8>>> {
-        // Check bloom filter first (fast negative lookup)
         let hash = blake3_hash(key.as_bytes());
-        let hash_bytes: [u8; 32] = hex::decode(&hash)
-            .unwrap_or_else(|_| vec![0u8; 32])
-            .try_into()
-            .unwrap_or([0u8; 32]);
+        let mut hash_bytes = [0u8; 32];
+        let raw = hex::decode(&hash).unwrap_or_else(|_| vec![0u8; 32]);
+        hash_bytes.copy_from_slice(&raw[..32]);
 
         if !self.bloom.check(&hash_bytes) {
             return Ok(None);
         }
 
-        // Check index
         let location = match self.index.get(key) {
             Some(loc) => loc,
             None => return Ok(None),
         };
 
-        // Read from segment
         self.read_blob(location)
     }
 
-    /// Delete a blob
     pub fn delete(&mut self, key: &str) -> Result<()> {
-        // Append to WAL
         self.wal.append_delete(key)?;
-
-        // Remove from index
         self.index.remove(key);
-
-        // Note: bloom filter is not updated (false positives are OK)
-
         Ok(())
     }
 
-    /// Compact storage (remove deleted blobs)
     pub fn compact(&mut self) -> Result<()> {
         tracing::info!("Starting compaction");
+        let segments_dir = self.data_path.join("segments");
+        let temp_dir = self.data_path.join("compact_tmp");
+        let backup_dir = self.data_path.join("compact_old");
 
-        // Create temporary storage
-        let temp_path = self.data_path.join("compact_temp");
-        fs::create_dir_all(&temp_path)?;
+        if temp_dir.exists() {
+            fs::remove_dir_all(&temp_dir)?;
+        }
+        fs::create_dir_all(&temp_dir)?;
 
-        // Copy all active blobs to new segments
         let mut new_index = Index::new();
         let mut new_segment = 0u64;
         let mut new_offset = 0u64;
 
         for (key, old_location) in self.index.iter() {
-            // Read old blob
             if let Ok(Some(value)) = self.read_blob(old_location) {
-                // Write to new location
-                let location =
-                    self.write_blob_to_segment(&temp_path, new_segment, new_offset, key, &value)?;
+                let location = self.write_blob_to_segment(
+                    &temp_dir,
+                    new_segment,
+                    new_offset,
+                    key,
+                    &value,
+                )?;
 
                 new_index.insert(key.clone(), location.clone());
 
-                new_offset = location.offset + location.size + 16; // header + data + crc
+                let record_size = 4 + 4 + 8 + key.len() as u64 + value.len() as u64 + 4;
+                new_offset = location.offset + record_size;
 
-                // Rotate segment if needed
                 if new_offset > SEGMENT_SIZE {
                     new_segment += 1;
                     new_offset = 0;
@@ -222,31 +209,28 @@ impl BlobStore {
             }
         }
 
-        // Replace old segments with new ones
-        let backup_path = self.data_path.join("compact_backup");
-        fs::rename(&self.data_path, &backup_path)?;
-        fs::rename(&temp_path, &self.data_path)?;
+        // Atomic swap: rename existing data to backup, temp to data, then remove backup
+        if backup_dir.exists() {
+            fs::remove_dir_all(&backup_dir)?;
+        }
+        fs::rename(&segments_dir, &backup_dir)?;
+        fs::rename(&temp_dir, &segments_dir)?;
 
-        // Update state
         self.index = new_index;
         self.current_segment = new_segment;
         self.current_offset = new_offset;
 
-        // Save snapshot
         self.save_snapshot()?;
-
-        // Truncate WAL
         self.wal.truncate()?;
 
-        // Remove backup
-        fs::remove_dir_all(&backup_path)?;
+        if backup_dir.exists() {
+            fs::remove_dir_all(&backup_dir)?;
+        }
 
         tracing::info!("Compaction complete: {} keys", self.index.len());
-
         Ok(())
     }
 
-    /// Save index snapshot
     pub fn save_snapshot(&self) -> Result<()> {
         let snapshot_path = self.data_path.join("index.snap");
         self.index.save_snapshot(&snapshot_path)?;
@@ -254,7 +238,6 @@ impl BlobStore {
         Ok(())
     }
 
-    /// Get statistics
     pub fn stats(&self) -> StoreStats {
         let total_bytes: u64 = self.index.iter().map(|(_, loc)| loc.size).sum();
 
@@ -263,13 +246,11 @@ impl BlobStore {
             total_bytes,
             active_segments: (self.current_segment + 1) as usize,
             index_size: self.index.len(),
-            bloom_false_positives: 0, // TODO: track this
+            bloom_false_positives: 0,
         }
     }
 
-    /// Write blob to current segment
     fn write_blob(&mut self, key: &str, value: &[u8]) -> Result<BlobLocation> {
-        // Check if we need to rotate segment
         if self.current_offset > SEGMENT_SIZE {
             self.current_segment += 1;
             self.current_offset = 0;
@@ -280,19 +261,19 @@ impl BlobStore {
         }
 
         let location = self.write_blob_to_segment(
-            &self.data_path,
+            &self.data_path.join("segments"),
             self.current_segment,
             self.current_offset,
             key,
             value,
         )?;
 
-        self.current_offset = location.offset + location.size + 16;
+        let record_size = 4 + 4 + 8 + key.len() as u64 + value.len() as u64 + 4;
+        self.current_offset = location.offset + record_size;
 
         Ok(location)
     }
 
-    /// Write blob to specific segment
     fn write_blob_to_segment(
         &self,
         base_path: &Path,
@@ -301,8 +282,7 @@ impl BlobStore {
         key: &str,
         value: &[u8],
     ) -> Result<BlobLocation> {
-        let (dir1, dir2) = blob_prefix(key);
-        let segment_dir = base_path.join(&dir1).join(&dir2);
+        let segment_dir = base_path;
         fs::create_dir_all(&segment_dir)?;
 
         let segment_file = segment_dir.join(format!("seg_{:04}.blob", segment));
@@ -317,16 +297,13 @@ impl BlobStore {
 
         let mut writer = BufWriter::new(&file);
 
-        // Write header
         writer.write_all(&BLOB_MAGIC)?;
         writer.write_all(&(key.len() as u32).to_le_bytes())?;
         writer.write_all(&(value.len() as u64).to_le_bytes())?;
 
-        // Write payload
         writer.write_all(key.as_bytes())?;
         writer.write_all(value)?;
 
-        // Compute and write checksum
         let mut checksum_data = Vec::new();
         checksum_data.extend_from_slice(&(key.len() as u32).to_le_bytes());
         checksum_data.extend_from_slice(&(value.len() as u64).to_le_bytes());
@@ -352,13 +329,10 @@ impl BlobStore {
         })
     }
 
-    /// Read blob from location
     fn read_blob(&self, location: &BlobLocation) -> Result<Option<Vec<u8>>> {
-        let (dir1, dir2) = blob_prefix(&format!("seg_{}", location.shard));
         let segment_file = self
             .data_path
-            .join(&dir1)
-            .join(&dir2)
+            .join("segments")
             .join(format!("seg_{:04}.blob", location.shard));
 
         if !segment_file.exists() {
@@ -370,7 +344,6 @@ impl BlobStore {
 
         reader.seek(SeekFrom::Start(location.offset))?;
 
-        // Read header
         let mut magic = [0u8; 4];
         reader.read_exact(&mut magic)?;
 
@@ -386,15 +359,12 @@ impl BlobStore {
         reader.read_exact(&mut val_len_bytes)?;
         let val_len = u64::from_le_bytes(val_len_bytes) as usize;
 
-        // Read key
         let mut key_bytes = vec![0u8; key_len];
         reader.read_exact(&mut key_bytes)?;
 
-        // Read value
         let mut value = vec![0u8; val_len];
         reader.read_exact(&mut value)?;
 
-        // Read and verify checksum
         let mut checksum_bytes = [0u8; 4];
         reader.read_exact(&mut checksum_bytes)?;
         let stored_checksum = u32::from_le_bytes(checksum_bytes);
@@ -417,48 +387,34 @@ impl BlobStore {
         Ok(Some(value))
     }
 
-    /// Rebuild index from segments
     fn rebuild_index_from_segments(
         index: &mut Index,
         bloom: &mut Bloom<[u8; 32]>,
-        data_path: &Path,
+        segments_dir: &Path,
     ) -> Result<()> {
-        tracing::info!("Rebuilding index from segments");
+        tracing::info!("Rebuilding index from segments in {:?}", segments_dir);
 
-        // Walk through all segment files
-        for entry in fs::read_dir(data_path)? {
+        if !segments_dir.exists() {
+            return Ok(());
+        }
+
+        for entry in fs::read_dir(segments_dir)? {
             let entry = entry?;
-            if !entry.path().is_dir() {
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) != Some("blob") {
                 continue;
             }
-
-            for subentry in fs::read_dir(entry.path())? {
-                let subentry = subentry?;
-                if !subentry.path().is_dir() {
-                    continue;
-                }
-
-                for file_entry in fs::read_dir(subentry.path())? {
-                    let file_entry = file_entry?;
-                    let path = file_entry.path();
-
-                    if path.extension().and_then(|s| s.to_str()) == Some("blob") {
-                        Self::scan_segment(index, bloom, &path)?;
-                    }
-                }
-            }
+            Self::scan_segment(index, bloom, &path)?;
         }
 
         Ok(())
     }
 
-    /// Scan a segment file and update index
     fn scan_segment(index: &mut Index, bloom: &mut Bloom<[u8; 32]>, path: &Path) -> Result<()> {
         let file = File::open(path)?;
         let mut reader = BufReader::new(file);
         let mut offset = 0u64;
 
-        // Extract segment number from filename
         let segment = path
             .file_stem()
             .and_then(|s| s.to_str())
@@ -467,7 +423,6 @@ impl BlobStore {
             .unwrap_or(0);
 
         loop {
-            // Try to read magic
             let mut magic = [0u8; 4];
             match reader.read_exact(&mut magic) {
                 Ok(_) => {}
@@ -479,7 +434,6 @@ impl BlobStore {
                 break;
             }
 
-            // Read header
             let mut key_len_bytes = [0u8; 4];
             reader.read_exact(&mut key_len_bytes)?;
             let key_len = u32::from_le_bytes(key_len_bytes) as usize;
@@ -488,24 +442,19 @@ impl BlobStore {
             reader.read_exact(&mut val_len_bytes)?;
             let val_len = u64::from_le_bytes(val_len_bytes) as usize;
 
-            // Read key
             let mut key_bytes = vec![0u8; key_len];
             reader.read_exact(&mut key_bytes)?;
             let key = String::from_utf8_lossy(&key_bytes).to_string();
 
-            // Skip value
             reader.seek(SeekFrom::Current(val_len as i64))?;
 
-            // Read checksum
             let mut checksum_bytes = [0u8; 4];
             reader.read_exact(&mut checksum_bytes)?;
 
-            // Update index and bloom
             let hash = blake3_hash(key.as_bytes());
-            let hash_bytes: [u8; 32] = hex::decode(&hash)
-                .unwrap_or_else(|_| vec![0u8; 32])
-                .try_into()
-                .unwrap_or([0u8; 32]);
+            let mut hash_bytes = [0u8; 32];
+            let raw = hex::decode(&hash).unwrap_or_else(|_| vec![0u8; 32]);
+            hash_bytes.copy_from_slice(&raw[..32]);
             bloom.set(&hash_bytes);
 
             index.insert(
@@ -524,48 +473,34 @@ impl BlobStore {
         Ok(())
     }
 
-    /// Find current segment and offset
-    fn find_current_position(data_path: &Path) -> Result<(u64, u64)> {
+    fn find_current_position(segments_dir: &Path) -> Result<(u64, u64)> {
         let mut max_segment = 0u64;
         let mut max_offset = 0u64;
 
-        if !data_path.exists() {
+        if !segments_dir.exists() {
             return Ok((0, 0));
         }
 
-        for entry in fs::read_dir(data_path)? {
+        for entry in fs::read_dir(segments_dir)? {
             let entry = entry?;
-            if !entry.path().is_dir() {
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) != Some("blob") {
                 continue;
             }
 
-            for subentry in fs::read_dir(entry.path())? {
-                let subentry = subentry?;
-                if !subentry.path().is_dir() {
-                    continue;
-                }
+            let segment = path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .and_then(|s| s.strip_prefix("seg_"))
+                .and_then(|s| s.parse::<u64>().ok())
+                .unwrap_or(0);
 
-                for file_entry in fs::read_dir(subentry.path())? {
-                    let file_entry = file_entry?;
-                    let path = file_entry.path();
+            let metadata = fs::metadata(&path)?;
+            let size = metadata.len();
 
-                    if path.extension().and_then(|s| s.to_str()) == Some("blob") {
-                        let segment = path
-                            .file_stem()
-                            .and_then(|s| s.to_str())
-                            .and_then(|s| s.strip_prefix("seg_"))
-                            .and_then(|s| s.parse::<u64>().ok())
-                            .unwrap_or(0);
-
-                        let metadata = fs::metadata(&path)?;
-                        let size = metadata.len();
-
-                        if segment > max_segment || (segment == max_segment && size > max_offset) {
-                            max_segment = segment;
-                            max_offset = size;
-                        }
-                    }
-                }
+            if segment > max_segment || (segment == max_segment && size > max_offset) {
+                max_segment = segment;
+                max_offset = size;
             }
         }
 
