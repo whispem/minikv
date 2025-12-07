@@ -207,13 +207,8 @@ impl BlobStore {
             // Read old blob
             if let Ok(Some(value)) = self.read_blob(old_location) {
                 // Write to new location
-                let location = self.write_blob_to_segment(
-                    &temp_path,
-                    new_segment,
-                    new_offset,
-                    key,
-                    &value,
-                )?;
+                let location =
+                    self.write_blob_to_segment(&temp_path, new_segment, new_offset, key, &value)?;
 
                 new_index.insert(key.clone(), location);
 
@@ -621,8 +616,7 @@ mod tests {
         let wal_path = dir.path().join("wal");
 
         {
-            let mut store =
-                BlobStore::open(&data_path, &wal_path, WalSyncPolicy::Always).unwrap();
+            let mut store = BlobStore::open(&data_path, &wal_path, WalSyncPolicy::Always).unwrap();
             store.put("key1", b"value1").unwrap();
             store.save_snapshot().unwrap();
         }
