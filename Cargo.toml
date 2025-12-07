@@ -49,6 +49,7 @@ chrono = "0.4"
 percent-encoding = "2.3"
 # Byte utilities
 bytes = "1.11"
+hex = "0.4"
 # HTTP client (for volume pull operations)
 reqwest = { version = "0.12", features = ["stream"] }
 tokio-stream = "0.1"
