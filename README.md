@@ -1,6 +1,6 @@
 # minikv 🦀
 
-**A production-grade distributed key-value store with Raft consensus**  
+**A production-ready distributed key-value store with Raft consensus**  
 *Built in 24 hours by someone learning Rust for 31 days*
 
 [![Rust](https://img.shields.io/badge/rust-1.81+-orange.svg)](https://rustup.rs/)
