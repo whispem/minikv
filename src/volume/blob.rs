@@ -67,8 +67,8 @@ impl BlobStore {
         };
 
         // Initialize bloom filter
-        let mut bloom: Bloom<[u8; 32]> = Bloom::new_for_fp_rate(100_000, 0.01)
-            .expect("Failed to create bloom filter");
+        let mut bloom: Bloom<[u8; 32]> =
+            Bloom::new_for_fp_rate(100_000, 0.01).expect("Failed to create bloom filter");
 
         // Open WAL
         let wal_file = wal_path.join("wal.log");
