@@ -4,13 +4,10 @@
 
 *Built in 24 hours by someone learning Rust for 31 days* 🚀
 
-[![Rust](https://img.shields. io/badge/rust-1.81+-orange.svg)](https://rustup.rs/)
-
+[![Rust](https://img.shields.io/badge/rust-1.81+-orange.svg)](https://rustup.rs/)
 [![License: MIT](https://img.shields. io/badge/License-MIT-yellow.svg)](LICENSE)
-
-[![Production Ready](https://img.shields. io/badge/status-production_ready-success)](https://github.com/whispem/minikv)
-
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen. svg)]( github/workflows/ci.yml)
+[![Production Ready](https://img.shields.io/badge/status-production_ready-success)](https://github.com/whispem/minikv)
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen. svg)](. github/workflows/ci.yml)
 
 ---
 
