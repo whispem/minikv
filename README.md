@@ -777,7 +777,7 @@ MIT License - see [LICENSE](LICENSE)
 
 ## 🙏 Acknowledgments
 
-Built by [@whispem](https://github. com/whispem) as a learning project. 
+Built by [@whispem](https://github.com/whispem) as a learning project. 
 
 **Inspired by:**
 - [TiKV](https://github.com/tikv/tikv) - Production-grade distributed KV store with Raft
@@ -787,7 +787,7 @@ Built by [@whispem](https://github. com/whispem) as a learning project.
 **Resources that helped:**
 - [The Rust Book](https://doc.rust-lang.org/book/) - Best programming book ever written
 - [Designing Data-Intensive Applications](https://dataintensive.net/) - Martin Kleppmann
-- [Raft Paper](https://raft.github. io/raft.pdf) - In Search of an Understandable Consensus Algorithm
+- [Raft Paper](https://raft.github.io/raft.pdf) - In Search of an Understandable Consensus Algorithm
 - [Tokio Tutorial](https://tokio.rs/tokio/tutorial) - Async Rust
 - [gRPC Rust Tutorial](https://github.com/hyperium/tonic) - Tonic documentation
 
