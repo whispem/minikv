@@ -10,7 +10,6 @@
 //! ## Architecture
 
 #![allow(clippy::result_large_err)]
-
 // CI trigger: commit for relaunch
 //!
 //! ```text
