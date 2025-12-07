@@ -139,7 +139,11 @@ impl BlobStore {
 
         if self.sync_policy == WalSyncPolicy::Always {
             let bloom_path = self.data_path.join("bloom.filter");
-            let mut f = OpenOptions::new().create(true).write(true).truncate(true).open(&bloom_path)?;
+            let mut f = OpenOptions::new()
+                .create(true)
+                .write(true)
+                .truncate(true)
+                .open(&bloom_path)?;
             let bytes = self.bloom.to_bytes();
             f.write_all(&bytes)?;
             f.sync_all()?;
@@ -189,13 +193,8 @@ impl BlobStore {
 
         for (key, old_location) in self.index.iter() {
             if let Ok(Some(value)) = self.read_blob(old_location) {
-                let location = self.write_blob_to_segment(
-                    &temp_dir,
-                    new_segment,
-                    new_offset,
-                    key,
-                    &value,
-                )?;
+                let location =
+                    self.write_blob_to_segment(&temp_dir, new_segment, new_offset, key, &value)?;
 
                 new_index.insert(key.clone(), location.clone());
 
