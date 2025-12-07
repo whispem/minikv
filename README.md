@@ -86,50 +86,114 @@ cargo build --release
 ### 2. Start a Local Cluster
 
 **Option A: Using the convenience script**
-
+```bash
 ./scripts/serve.sh 3 3
+```
 
 **Option B: Using Docker Compose**
-
+```bash
 docker-compose up -d
+```
 
 **Option C: Manual (for learning)**
 
-Terminal 1-3 (Coordinators):
+**Terminal 1-3 (Coordinators):**
+```bash
+# Coordinator 1 (will become Raft leader)
+./target/release/minikv-coord serve \
+  --id coord-1 \
+  --bind 0.0.0.0:5000 \
+  --grpc 0.0.0.0:5001 \
+  --db ./coord1-data \
+  --peers coord-2:5003,coord-3:5005
 
-./target/release/minikv-coord serve --id coord-1 --bind 0.0.0.0:5000 --grpc 0.0.0.0:5001 --db ./coord1-data --peers coord-2:5003,coord-3:5005
-./target/release/minikv-coord serve --id coord-2 --bind 0.0.0.0:5002 --grpc 0.0.0.0:5003 --db ./coord2-data --peers coord-1:5001,coord-3:5005
-./target/release/minikv-coord serve --id coord-3 --bind 0.0.0.0:5004 --grpc 0.0.0.0:5005 --db ./coord3-data --peers coord-1:5001,coord-2:5003
+# Coordinator 2
+./target/release/minikv-coord serve \
+  --id coord-2 \
+  --bind 0.0.0.0:5002 \
+  --grpc 0.0.0.0:5003 \
+  --db ./coord2-data \
+  --peers coord-1:5001,coord-3:5005
 
-Terminal 4-6 (Volumes):
+# Coordinator 3
+./target/release/minikv-coord serve \
+  --id coord-3 \
+  --bind 0.0.0.0:5004 \
+  --grpc 0.0.0.0:5005 \
+  --db ./coord3-data \
+  --peers coord-1:5001,coord-2:5003
+```
 
-./target/release/minikv-volume serve --id vol-1 --bind 0.0.0.0:6000 --grpc 0.0.0.0:6001 --data ./vol1-data --wal ./vol1-wal --coordinators http://localhost:5000
-./target/release/minikv-volume serve --id vol-2 --bind 0.0.0.0:6002 --grpc 0.0.0.0:6003 --data ./vol2-data --wal ./vol2-wal --coordinators http://localhost:5000
-./target/release/minikv-volume serve --id vol-3 --bind 0.0.0.0:6004 --grpc 0.0.0.0:6005 --data ./vol3-data --wal ./vol3-wal --coordinators http://localhost:5000
+**Terminal 4-6 (Volumes):**
+```bash
+# Volume 1
+./target/release/minikv-volume serve \
+  --id vol-1 \
+  --bind 0.0.0.0:6000 \
+  --grpc 0.0.0.0:6001 \
+  --data ./vol1-data \
+  --wal ./vol1-wal \
+  --coordinators http://localhost:5000
+
+# Volume 2
+./target/release/minikv-volume serve \
+  --id vol-2 \
+  --bind 0.0.0.0:6002 \
+  --grpc 0.0.0.0:6003 \
+  --data ./vol2-data \
+  --wal ./vol2-wal \
+  --coordinators http://localhost:5000
+
+# Volume 3
+./target/release/minikv-volume serve \
+  --id vol-3 \
+  --bind 0.0.0.0:6004 \
+  --grpc 0.0.0.0:6005 \
+  --data ./vol3-data \
+  --wal ./vol3-wal \
+  --coordinators http://localhost:5000
+```
 
 ### 3. Use the CLI
-
+```bash
+# Put a blob (automatically replicated 3x)
 echo "Hello, distributed world!" > test.txt
 ./target/release/minikv put my-key --file test.txt
+
+# Get it back
 ./target/release/minikv get my-key --output retrieved.txt
+
+# Delete
 ./target/release/minikv delete my-key
-./target/release/minikv verify --deep
-./target/release/minikv repair --replicas 3
-./target/release/minikv compact --shard 0
+
+# Cluster operations
+./target/release/minikv verify --deep        # Check integrity
+./target/release/minikv repair --replicas 3  # Fix under-replication
+./target/release/minikv compact --shard 0    # Reclaim space
+```
 
 ### 4. Use the HTTP API
+```bash
+# Put a blob
+curl -X PUT http://localhost:5000/my-key \
+  --data-binary @file.pdf
 
-curl -X PUT http://localhost:5000/my-key --data-binary @file.pdf
+# Get a blob
 curl http://localhost:5000/my-key -o output.pdf
+
+# Delete a blob
 curl -X DELETE http://localhost:5000/my-key
+
+# Health check
 curl http://localhost:5000/health
+```
 
 ---
 
 ## 🏗️ Architecture
 
 ### High-Level Overview
-
+```
 ┌─────────────────────────────────────────────────────┐
 │          Coordinator Cluster (Raft)                 │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐          │
@@ -151,6 +215,7 @@ curl http://localhost:5000/health
 │+ Bloom  │ │+ Bloom   │ │+ Bloom   │ │+ Bloom   │
 │+ Snap   │ │+ Snap    │ │+ Snap    │ │+ Snap    │
 └─────────┘ └──────────┘ └──────────┘ └──────────┘
+```
 
 ### Components
 
