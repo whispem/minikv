@@ -23,7 +23,9 @@ COPY proto ./proto
 COPY src ./src
 
 # Build volume binary
-RUN cargo build --release --bin minikv-volume
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/app/target \
+    cargo build --release --bin minikv-volume
 
 # Runtime stage
 FROM debian:bookworm-slim
