@@ -1,6 +1,4 @@
 use bloomfilter::Bloom;
-use std::fs::{File, OpenOptions};
-use std::io::{Read, Write};
 use std::path::PathBuf;
 
 pub struct BlobStore {
