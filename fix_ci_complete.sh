@@ -19,7 +19,7 @@ if [ ! -f "Cargo.toml" ]; then
 fi
 
 # Backup
-echo -e "${YELLOW}📦 Creating backups...${NC}"
+echo -e "${YELLOW} Creating backups...${NC}"
 cp Cargo.toml Cargo.toml.backup 2>/dev/null || true
 [ -f tests/integration.rs ] && cp tests/integration.rs tests/integration.rs.backup
 [ -f src/volume/blob.rs ] && cp src/volume/blob.rs src/volume/blob.rs.backup
@@ -27,7 +27,7 @@ echo -e "${GREEN}✓${NC} Backups created"
 echo ""
 
 # ===== FIX 0: Add hex dependency =====
-echo -e "${BLUE}🔧 Fix 0: Adding hex dependency to Cargo.toml${NC}"
+echo -e "${BLUE} Fix 0: Adding hex dependency to Cargo.toml${NC}"
 if ! grep -q "^hex = " Cargo.toml; then
     # Add hex after bytes
     sed -i.bak '/^bytes = /a\
@@ -41,7 +41,7 @@ fi
 echo ""
 
 # ===== FIX 0b: Replace blob.rs with complete implementation =====
-echo -e "${BLUE}🔧 Fix 0b: Installing complete BlobStore implementation${NC}"
+echo -e "${BLUE} Fix 0b: Installing complete BlobStore implementation${NC}"
 cat > src/volume/blob.rs << 'EOFBLOB'
 //! Blob storage with segmented append-only logs
 //!
@@ -372,7 +372,7 @@ echo -e "${GREEN}✓${NC} blob.rs formatted"
 echo ""
 
 # ===== FIX 1: tests/integration.rs =====
-echo -e "${BLUE}🔧 Fix 1: Correcting tests/integration.rs${NC}"
+echo -e "${BLUE} Fix 1: Correcting tests/integration.rs${NC}"
 cat > tests/integration.rs << 'EOF'
 //! Integration tests for minikv
 
@@ -462,7 +462,7 @@ echo -e "${GREEN}✓${NC} tests/integration.rs fixed"
 echo ""
 
 # ===== FIX 2: src/common/hash.rs (test_consistent_hash_ring) =====
-echo -e "${BLUE}🔧 Fix 2: Fixing test_consistent_hash_ring${NC}"
+echo -e "${BLUE} Fix 2: Fixing test_consistent_hash_ring${NC}"
 # Problem: get_nodes() returns None if shard is not assigned
 # Solution: assign shards first OR use rebalance() OR find a key that maps to the right shard
 sed -i.bak '/fn test_consistent_hash_ring/,/^}$/ {
@@ -522,7 +522,7 @@ echo -e "${GREEN}✓${NC} test_consistent_hash_ring fixed"
 echo ""
 
 # ===== FIX 3: src/volume/wal.rs (tests WAL) =====
-echo -e "${BLUE}🔧 Fix 3: Fixing WAL tests${NC}"
+echo -e "${BLUE} Fix 3: Fixing WAL tests${NC}"
 
 # Problem: test_wal_basic expects 0 entries but finds 1
 # test_wal_reopen expects 2 but finds 3
@@ -630,7 +630,7 @@ echo -e "${GREEN}✓${NC} WAL tests fixed"
 echo ""
 
 # ===== FIX 4: Unused variables =====
-echo -e "${BLUE}🔧 Fix 4: Fixing unused variables${NC}"
+echo -e "${BLUE} Fix 4: Fixing unused variables${NC}"
 
 # coordinator/http.rs
 sed -i.bak 's/Path(key): Path<String>/Path(_key): Path<String>/g' src/coordinator/http.rs
@@ -648,13 +648,13 @@ echo -e "${GREEN}✓${NC} Unused variables fixed"
 echo ""
 
 # ===== FIX 5: Format everything =====
-echo -e "${BLUE}🎨 Fix 5: Formatting code${NC}"
+echo -e "${BLUE} Fix 5: Formatting code${NC}"
 cargo fmt --all 2>&1 | grep -v "warning:" || true
 echo -e "${GREEN}✓${NC} Code formatted"
 echo ""
 
 # ===== FIX 6: Verify build =====
-echo -e "${BLUE}🔨 Fix 6: Verifying build${NC}"
+echo -e "${BLUE} Fix 6: Verifying build${NC}"
 if cargo build --all-targets 2>&1 | tail -20; then
     echo -e "${GREEN}✓${NC} Build successful"
 else
@@ -664,7 +664,7 @@ fi
 echo ""
 
 # ===== FIX 7: Run tests =====
-echo -e "${BLUE}🧪 Fix 7: Running tests${NC}"
+echo -e "${BLUE} Fix 7: Running tests${NC}"
 if cargo test --lib 2>&1 | tail -30; then
     echo -e "${GREEN}✓${NC} Tests passed"
 else
@@ -673,7 +673,7 @@ fi
 echo ""
 
 # ===== CLEANUP: Remove redundant scripts =====
-echo -e "${BLUE}🗑️  Fix 8: Cleaning redundant scripts${NC}"
+echo -e "${BLUE} Fix 8: Cleaning redundant scripts${NC}"
 
 REDUNDANT_SCRIPTS=(
     "fix_all.sh"
@@ -696,9 +696,9 @@ echo -e "${BLUE}╔════════════════════�
 echo -e "${BLUE}║          Fixes Complete                   ║${NC}"
 echo -e "${BLUE}╚═══════════════════════════════════════════╝${NC}"
 echo ""
-echo -e "${GREEN}✅ All fixes applied!${NC}"
+echo -e "${GREEN} All fixes applied!${NC}"
 echo ""
-echo "📋 Changes made:"
+echo "Changes made:"
 echo "  • Added hex = \"0.4\" to Cargo.toml"
 echo "  • src/volume/blob.rs - Complete BlobStore implementation"
 echo "  • tests/integration.rs - Real tests with put/get/delete"
@@ -709,13 +709,13 @@ echo "  • src/bin/cli.rs - Prefixed unused params with _"
 echo "  • All code formatted with cargo fmt"
 echo "  • Removed 5 redundant shell scripts"
 echo ""
-echo "🚀 Next steps:"
+echo "Next steps:"
 echo "  1. Review changes: git diff"
 echo "  2. Test locally: cargo test"
 echo "  3. Commit: git add -A && git commit -m 'feat: complete BlobStore implementation + fix CI'"
 echo "  4. Push: git push"
 echo ""
-echo "💾 Backups saved:"
+echo "Backups saved:"
 echo "  • Cargo.toml.backup"
 echo "  • tests/integration.rs.backup"
 echo "  • src/volume/blob.rs.backup"
