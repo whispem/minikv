@@ -6,7 +6,7 @@ set -euo pipefail
 COORDINATOR="${1:-http://127.0.0.1:5000}"
 DEEP="${2:-false}"
 
-echo "🔍 Verifying cluster integrity"
+echo "Verifying cluster integrity"
 echo "  Coordinator: ${COORDINATOR}"
 echo "  Deep check: ${DEEP}"
 echo ""
