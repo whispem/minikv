@@ -7,7 +7,7 @@
 [![Rust](https://img.shields.io/badge/rust-1.81+-orange.svg)](https://rustup.rs/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Production Ready](https://img.shields.io/badge/status-production_ready-success)](https://github.com/whispem/minikv)
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](. github/workflows/ci.yml)
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](.github/workflows/ci.yml)
 
 ---
 
