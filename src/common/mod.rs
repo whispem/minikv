@@ -3,8 +3,8 @@
 pub mod config;
 pub mod error;
 pub mod hash;
-pub mod utils;
 pub mod raft;
+pub mod utils;
 
 pub use config::{Config, CoordinatorConfig, NodeRole, RuntimeConfig, VolumeConfig, WalSyncPolicy};
 pub use error::{Error, Result};

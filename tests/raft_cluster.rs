@@ -1,7 +1,7 @@
 //! Test d'intégration Raft : élection, réplication, failover
 
-use minikv::coordinator::raft_node::{RaftNode, RaftRole};
 use minikv::common::raft::LogEntry;
+use minikv::coordinator::raft_node::{RaftNode, RaftRole};
 use std::sync::Arc;
 
 #[tokio::test]
@@ -18,7 +18,11 @@ async fn raft_election_and_replication() {
     assert_eq!(node1.get_role(), RaftRole::Leader);
 
     // Simule une réplication d'entrée
-    let entry = LogEntry { term: node1.get_term(), index: 1, data: b"set x=42".to_vec() };
+    let entry = LogEntry {
+        term: node1.get_term(),
+        index: 1,
+        data: b"set x=42".to_vec(),
+    };
     node1.get_log().push(entry.clone());
     let append_req = minikv::common::raft::AppendRequest {
         term: node1.get_term(),
@@ -38,8 +42,10 @@ async fn raft_election_and_replication() {
     assert_eq!(node3.get_log()[0].data, b"set x=42".to_vec());
 
     // Simule le failover : le leader step_down, node2 démarre une élection
-    node1.step_down(node1.get_term()+1, Some("node2".to_string()));
-    let is_leader2 = node2.start_election_and_collect_votes(vec!["node1".to_string(), "node3".to_string()]).await;
+    node1.step_down(node1.get_term() + 1, Some("node2".to_string()));
+    let is_leader2 = node2
+        .start_election_and_collect_votes(vec!["node1".to_string(), "node3".to_string()])
+        .await;
     assert!(is_leader2);
     assert_eq!(node2.get_role(), RaftRole::Leader);
 }

@@ -44,7 +44,10 @@ impl RaftNode {
         // TODO: envoyer AppendEntries (heartbeat) à tous les peers via gRPC
     }
     /// Traiter une requête RequestVote reçue
-    pub fn handle_request_vote(&self, req: crate::common::raft::VoteRequest) -> crate::common::raft::VoteResponse {
+    pub fn handle_request_vote(
+        &self,
+        req: crate::common::raft::VoteRequest,
+    ) -> crate::common::raft::VoteResponse {
         let mut term = self.term.lock().unwrap();
         let mut voted_for = self.voted_for.lock().unwrap();
         let current_term = *term;
@@ -69,7 +72,10 @@ impl RaftNode {
     }
 
     /// Traiter une requête AppendEntries reçue
-    pub fn handle_append_entries(&self, req: crate::common::raft::AppendRequest) -> crate::common::raft::AppendResponse {
+    pub fn handle_append_entries(
+        &self,
+        req: crate::common::raft::AppendRequest,
+    ) -> crate::common::raft::AppendResponse {
         let mut term = self.term.lock().unwrap();
         let current_term = *term;
         let mut log = self.log.lock().unwrap();
@@ -101,8 +107,8 @@ impl RaftNode {
     pub async fn start_election_and_collect_votes(&self, peers: Vec<String>) -> bool {
         let new_term = self.start_election();
         let mut votes = 1; // On vote pour soi-même
-        // TODO: envoyer RequestVote à tous les peers via gRPC
-        // Simuler la majorité pour l'exemple
+                           // TODO: envoyer RequestVote à tous les peers via gRPC
+                           // Simuler la majorité pour l'exemple
         if !peers.is_empty() {
             votes += peers.len();
         }
@@ -215,7 +221,8 @@ pub fn start_raft_tasks(node: Arc<RaftNode>) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         // Raft main loop: handle timeouts, elections, heartbeats
         let mut last_heartbeat = tokio::time::Instant::now();
-        let mut election_timeout = tokio::time::Duration::from_millis(150 + rand::random::<u64>() % 150);
+        let mut election_timeout =
+            tokio::time::Duration::from_millis(150 + rand::random::<u64>() % 150);
 
         loop {
             tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
@@ -227,7 +234,8 @@ pub fn start_raft_tasks(node: Arc<RaftNode>) -> tokio::task::JoinHandle<()> {
                 // TODO: Send RequestVote RPCs to other nodes
                 // TODO: Collect votes and become leader if majority
                 // TODO: Reset election timeout
-                election_timeout = tokio::time::Duration::from_millis(150 + rand::random::<u64>() % 150);
+                election_timeout =
+                    tokio::time::Duration::from_millis(150 + rand::random::<u64>() % 150);
                 last_heartbeat = tokio::time::Instant::now();
             }
 
