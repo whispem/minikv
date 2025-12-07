@@ -13,5 +13,6 @@ pub mod metadata;
 pub mod placement;
 pub mod raft_node;
 pub mod server;
+pub mod volume_client;
 
 pub use server::Coordinator;

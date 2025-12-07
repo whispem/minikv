@@ -53,6 +53,7 @@ hex = "0.4"
 # HTTP client (for volume pull operations)
 reqwest = { version = "0.12", features = ["stream"] }
 tokio-stream = "0.1"
+uuid = { version = "1.19.0", features = ["v4"] }
 
 [build-dependencies]
 tonic-build = "0.12"
