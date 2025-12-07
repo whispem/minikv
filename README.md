@@ -1,18 +1,19 @@
-# minikv 🦀
+# 🦀 minikv
 
-**A production-ready distributed key-value store with Raft consensus**  
-*Built in 24 hours by someone learning Rust for 31 days*
+**A production-ready distributed key-value store with Raft consensus**
 
-[![Rust](https://img.shields.io/badge/rust-1.81+-orange.svg)](https://rustup.rs/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Production Ready](https://img.shields.io/badge/status-production_ready-success)](https://github.com/whispem/minikv)
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](.github/workflows/ci.yml)
+*Built in 24 hours by someone learning Rust for 31 days* 🚀
+
+[![Rust](https://img.shields. io/badge/rust-1.81+-orange.svg)](https://rustup.rs/)
+[![License: MIT](https://img.shields. io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Production Ready](https://img.shields. io/badge/status-production_ready-success)](https://github.com/whispem/minikv)
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen. svg)](. github/workflows/ci.yml)
 
 ---
 
 ## 📖 Table of Contents
 
-- [What is minikv?](#-what-is-minikv)
+- [What is minikv? ](#-what-is-minikv)
 - [Quick Start](#-quick-start)
 - [Architecture](#️-architecture)
 - [Performance](#-performance)
@@ -21,28 +22,30 @@
 - [Documentation](#-documentation)
 - [Development](#-development)
 - [Contributing](#-contributing)
-- [License](#-license)
 
 ---
 
-## 🎯 What is minikv?
+## ✨ What is minikv? 
 
-minikv is a **distributed key-value store** built from scratch in Rust, featuring:
+**minikv** is a distributed key-value store built **from scratch** in Rust, designed to be production-ready with enterprise-grade features.
 
-- **Raft consensus** for high availability
-- **Two-Phase Commit (2PC)** for strong consistency
-- **Write-Ahead Log (WAL)** for durability
-- **256 virtual shards** for horizontal scalability
-- **Bloom filters** for fast lookups
-- **gRPC** for internal coordination
-- **HTTP REST API** for client access
+### 🎯 Core Features
 
-### Evolution from mini-kvstore-v2
+- ⚡ **Raft consensus** for high availability
+- 🔄 **Two-Phase Commit (2PC)** for strong consistency
+- 💾 **Write-Ahead Log (WAL)** for durability
+- 🗂️ **256 virtual shards** for horizontal scalability
+- 🌸 **Bloom filters** for fast lookups
+- 📡 **gRPC** for internal coordination
+- 🌐 **HTTP REST API** for client access
+- 🔍 **O(1) in-memory index** with HashMap
 
-This is the distributed evolution of my first project, [mini-kvstore-v2](https://github.com/whispem/mini-kvstore-v2):
+### 🔄 Evolution from mini-kvstore-v2
 
-| Feature | mini-kvstore-v2 | **minikv** |
-|---------|----------------|-----------|
+This is the **distributed evolution** of [mini-kvstore-v2](https://github.com/whispem/mini-kvstore-v2):
+
+| Feature | mini-kvstore-v2 | minikv |
+|---------|----------------|---------|
 | Architecture | Single-node | **Multi-node cluster** |
 | Consensus | ❌ None | **✅ Raft** |
 | Replication | ❌ None | **✅ N-way (2PC)** |
@@ -50,10 +53,10 @@ This is the distributed evolution of my first project, [mini-kvstore-v2](https:/
 | Sharding | ❌ None | **✅ 256 virtual shards** |
 | Lines of Code | ~1,200 | ~1,800 |
 | Development Time | 10 days | **+24 hours** |
-| Performance | 240K writes/s | 80K writes/s (replicated 3x) |
-| | 11M reads/s | 8M reads/s (distributed) |
+| Write Performance | 240K ops/s | 80K ops/s (replicated 3x) |
+| Read Performance | 11M ops/s | 8M ops/s (distributed) |
 
-**What's preserved:**
+**What's preserved from v2:**
 - ✅ Segmented append-only logs
 - ✅ In-memory HashMap index (O(1) lookups)
 - ✅ Bloom filters for negative lookups
@@ -65,7 +68,7 @@ This is the distributed evolution of my first project, [mini-kvstore-v2](https:/
 - 🆕 2PC for distributed transactions
 - 🆕 gRPC internal protocol
 - 🆕 WAL for durability
-- 🆕 Dynamic sharding
+- 🆕 Dynamic sharding with 256 virtual shards
 - 🆕 Automatic rebalancing
 
 ---
@@ -79,27 +82,32 @@ This is the distributed evolution of my first project, [mini-kvstore-v2](https:/
 
 ### 1. Build from Source
 
+```bash
 git clone https://github.com/whispem/minikv
 cd minikv
 cargo build --release
+```
 
 ### 2. Start a Local Cluster
 
-**Option A: Using the convenience script**
+**Option A: One-line script (Recommended)**
+
 ```bash
-./scripts/serve.sh 3 3
+./scripts/serve. sh 3 3  # 3 coordinators + 3 volumes
 ```
 
 **Option B: Using Docker Compose**
+
 ```bash
 docker-compose up -d
 ```
 
 **Option C: Manual (for learning)**
 
-**Terminal 1-3 (Coordinators):**
+Start 3 coordinators in separate terminals:
+
 ```bash
-# Coordinator 1 (will become Raft leader)
+# Terminal 1 - Coordinator 1 (will become Raft leader)
 ./target/release/minikv-coord serve \
   --id coord-1 \
   --bind 0.0.0.0:5000 \
@@ -107,7 +115,7 @@ docker-compose up -d
   --db ./coord1-data \
   --peers coord-2:5003,coord-3:5005
 
-# Coordinator 2
+# Terminal 2 - Coordinator 2
 ./target/release/minikv-coord serve \
   --id coord-2 \
   --bind 0.0.0.0:5002 \
@@ -115,18 +123,19 @@ docker-compose up -d
   --db ./coord2-data \
   --peers coord-1:5001,coord-3:5005
 
-# Coordinator 3
+# Terminal 3 - Coordinator 3
 ./target/release/minikv-coord serve \
   --id coord-3 \
-  --bind 0.0.0.0:5004 \
+  --bind 0.0. 0.0:5004 \
   --grpc 0.0.0.0:5005 \
   --db ./coord3-data \
   --peers coord-1:5001,coord-2:5003
 ```
 
-**Terminal 4-6 (Volumes):**
+Start 3 volumes in separate terminals:
+
 ```bash
-# Volume 1
+# Terminal 4 - Volume 1
 ./target/release/minikv-volume serve \
   --id vol-1 \
   --bind 0.0.0.0:6000 \
@@ -135,16 +144,16 @@ docker-compose up -d
   --wal ./vol1-wal \
   --coordinators http://localhost:5000
 
-# Volume 2
+# Terminal 5 - Volume 2
 ./target/release/minikv-volume serve \
   --id vol-2 \
-  --bind 0.0.0.0:6002 \
-  --grpc 0.0.0.0:6003 \
+  --bind 0.0. 0.0:6002 \
+  --grpc 0. 0.0.0:6003 \
   --data ./vol2-data \
   --wal ./vol2-wal \
   --coordinators http://localhost:5000
 
-# Volume 3
+# Terminal 6 - Volume 3
 ./target/release/minikv-volume serve \
   --id vol-3 \
   --bind 0.0.0.0:6004 \
@@ -155,6 +164,7 @@ docker-compose up -d
 ```
 
 ### 3. Use the CLI
+
 ```bash
 # Put a blob (automatically replicated 3x)
 echo "Hello, distributed world!" > test.txt
@@ -173,10 +183,10 @@ echo "Hello, distributed world!" > test.txt
 ```
 
 ### 4. Use the HTTP API
+
 ```bash
 # Put a blob
-curl -X PUT http://localhost:5000/my-key \
-  --data-binary @file.pdf
+curl -X PUT http://localhost:5000/my-key --data-binary @file.pdf
 
 # Get a blob
 curl http://localhost:5000/my-key -o output.pdf
@@ -193,6 +203,7 @@ curl http://localhost:5000/health
 ## 🏗️ Architecture
 
 ### High-Level Overview
+
 ```
 ┌─────────────────────────────────────────────────────┐
 │          Coordinator Cluster (Raft)                 │
@@ -259,11 +270,12 @@ Coordinator (Raft Leader)
   metadata["my-key"] = {
     replicas: [vol-1, vol-3, vol-5],
     size: 1MB,
-    blake3: abc...,
+    blake3: abc.. .,
     shard: 42
   }
   ↓
 ✅ Success → 201 Created
+```
 
 **Error Handling:**
 - If PREPARE fails → abort all
@@ -272,6 +284,7 @@ Coordinator (Raft Leader)
 
 ### Read Path (Optimized for Locality)
 
+```
 Client → GET /my-key
   ↓
 Coordinator: lookup metadata
@@ -285,16 +298,18 @@ Option B: Proxy (stream from vol-1 through coordinator)
 Volume-1:
   1️⃣ Check Bloom filter → probably exists
   2️⃣ Lookup index: "my-key" → {shard: 42, offset: 1024, size: 1MB}
-  3️⃣ Read from disk: segments/42/00/01.blob @ offset 1024
+  3️⃣ Read from disk: segments/42/00/01. blob @ offset 1024
   4️⃣ Verify CRC32 checksum
   5️⃣ Stream to client
   ↓
 ✅ 200 OK (1MB blob)
+```
 
 ### Failure Scenarios
 
 **Coordinator Failure:**
 
+```
 Coord-1 (Leader) crashes
   ↓
 Coord-2 and Coord-3 detect missing heartbeats
@@ -304,9 +319,11 @@ Raft election triggered (<200ms)
 Coord-2 becomes new leader
   ↓
 Clients automatically redirect to new leader
+```
 
 **Volume Failure:**
 
+```
 Vol-1 crashes (has replicas for shard 42)
   ↓
 Coordinator detects missing heartbeats
@@ -319,20 +336,14 @@ Writes: select different volume for new data
 Background repair job (optional):
   Copy under-replicated data to healthy volumes
 ```
+
 ---
 
 ## 📊 Performance
 
 ### Benchmarks
 
-```
 **Hardware:** MacBook M4, 16GB RAM, NVMe SSD
-
-**Single-node baseline** (mini-kvstore-v2):
-
-Writes:  240,000 ops/sec (no replication)
-Reads:   11,000,000 ops/sec (in-memory index)
-```
 
 **Distributed cluster** (3 coordinators + 3 volumes, replication factor = 3):
 
@@ -341,35 +352,47 @@ Writes:  80,000 ops/sec (2PC + 3x replication)
 Reads:   8,000,000 ops/sec (distributed reads)
 
 Latency (1MB blobs):
-  PUT:  p50=8ms, p90=15ms, p95=22ms
-  GET:  p50=1ms, p90=3ms, p95=5ms
+  PUT:  p50=8ms  p90=15ms  p95=22ms
+  GET:  p50=1ms  p90=3ms   p95=5ms
 
 Raft Consensus:
   Leader election: <200ms
   Log replication: ~5ms per entry
+```
+
+**Single-node baseline** (mini-kvstore-v2, no replication):
+
+```
+Writes:  240,000 ops/sec
+Reads:   11,000,000 ops/sec
+```
 
 ### Run Your Own Benchmarks
 
+```bash
 cargo bench
 ./scripts/benchmark.sh
 k6 run bench/scenarios/write-heavy.js
 k6 run bench/scenarios/read-heavy.js
+```
 
-**Example k6 Output:**
+**Example k6 output:**
 
+```
 ✓ write ok
 ✓ read ok
 
-write_latency...: avg=12.3ms min=3.2ms med=8.1ms max=89.4ms p(90)=18.7ms p(95)=24.3ms
-read_latency....: avg=2.1ms  min=0.4ms med=1.3ms max=45.2ms p(90)=3.8ms  p(95)=5.1ms
+write_latency.. .: avg=12.3ms min=3.2ms med=8.1ms max=89.4ms p(90)=18.7ms p(95)=24.3ms
+read_latency... .: avg=2.1ms  min=0.4ms med=1.3ms max=45.2ms p(90)=3.8ms  p(95)=5.1ms
 write_success...: 87.34% ✓ 69872  ✗ 10128
 read_success....: 99.82% ✓ 31945  ✗ 58
 ```
+
 ---
 
 ## 🚀 Features
 
-### ✅ Implemented (v0.1.0)
+### ✅ Implemented (v0.1. 0)
 
 **Core Distributed Features:**
 - [x] Raft consensus for coordinator (simplified single-leader for v0.1)
@@ -405,12 +428,12 @@ read_success....: 99.82% ✓ 31945  ✗ 58
 
 ### 🚧 In Progress (v0.2.0)
 
-- [ ] **Full Raft multi-node consensus** (currently simplified)
-- [ ] **Complete 2PC streaming** (coordinator → volume data transfer)
-- [ ] **Ops commands implementation** (verify/repair/compact logic)
-- [ ] **Automatic rebalancing** on node add/remove
-- [ ] **Compression** (LZ4/Zstd)
-- [ ] **Enhanced metrics** (Prometheus export)
+- [ ] Full Raft multi-node consensus (currently simplified)
+- [ ] Complete 2PC streaming (coordinator → volume data transfer)
+- [ ] Ops commands implementation (verify/repair/compact logic)
+- [ ] Automatic rebalancing on node add/remove
+- [ ] Compression (LZ4/Zstd)
+- [ ] Enhanced metrics (Prometheus export)
 
 ### 🔮 Planned (v0.3.0+)
 
@@ -427,19 +450,21 @@ read_success....: 99.82% ✓ 31945  ✗ 58
 
 ## 📚 The Story
 
-### Learning Journey
+### 🌟 From Zero to Distributed in 31 Days
 
-**Background:** Started learning Rust on **October 27, 2025**. Zero programming experience before that (I studied languages 🇫🇷).
+**Background:** Started learning Rust on **October 27, 2025**.  Zero programming experience before that (I studied languages 🇫🇷). 
 
 **Timeline:**
 
-**Week 1-2 (Oct 27 - Nov 9):** The Rust Book
+#### Week 1-2 (Oct 27 - Nov 9): The Rust Book
+
 - Ownership, borrowing, lifetimes
 - Structs, enums, pattern matching
-- Error handling with Result<T, E>
+- Error handling with `Result<T, E>`
 - Traits and generics
 
-**Week 3-5 (Nov 10 - Nov 25):** Built [mini-kvstore-v2](https://github.com/whispem/mini-kvstore-v2)
+#### Week 3-5 (Nov 10 - Nov 25): Built mini-kvstore-v2
+
 - Single-node key-value store
 - Segmented append-only logs
 - In-memory HashMap index
@@ -449,7 +474,8 @@ read_success....: 99.82% ✓ 31945  ✗ 58
 - ~1,200 lines of code
 - Performance: 240K writes/s, 11M reads/s
 
-**Day 31 (Dec 6, 2025):** Built minikv in 24 hours
+#### Day 31 (Dec 6, 2025): Built minikv in 24 hours
+
 - Transformed single-node into distributed system
 - Implemented Raft consensus (simplified)
 - Added 2PC for strong consistency
@@ -459,7 +485,7 @@ read_success....: 99.82% ✓ 31945  ✗ 58
 - ~1,800 lines of code
 - Performance: 80K writes/s (replicated), 8M reads/s
 
-### Key Learnings
+### 💡 Key Learnings
 
 **1. Raft Consensus**
 - Conceptually simple: leader election + log replication
@@ -481,31 +507,31 @@ read_success....: 99.82% ✓ 31945  ✗ 58
 - Space efficient: 100K keys = ~120KB filter
 
 **5. Rust Type System**
-- Option<T> eliminates null pointer bugs
-- Result<T, E> forces error handling
+- `Option<T>` eliminates null pointer bugs
+- `Result<T, E>` forces error handling
 - Ownership prevents data races at compile time
 - 90% of distributed systems bugs caught before running
 
-### Why Rust for Distributed Systems?
+### 🦀 Why Rust for Distributed Systems?
 
-✅ **Memory safety without GC pauses**
+**Memory safety without GC pauses**
 - No stop-the-world garbage collection
 - Predictable latency (important for p99)
 
-✅ **Fearless concurrency**
+**Fearless concurrency**
 - Ownership prevents data races
 - Send and Sync traits enforce thread safety
 
-✅ **Zero-cost abstractions**
+**Zero-cost abstractions**
 - High-level ergonomics (iterators, closures)
 - Low-level performance (no runtime overhead)
 
-✅ **Excellent tooling**
+**Excellent tooling**
 - cargo (build, test, benchmark)
 - rustfmt (consistent formatting)
 - clippy (advanced lints)
 
-✅ **Strong ecosystem**
+**Strong ecosystem**
 - tokio for async I/O
 - tonic for gRPC
 - axum for HTTP servers
@@ -525,16 +551,16 @@ read_success....: 99.82% ✓ 31945  ✗ 58
 
 **Q: Why Raft over Paxos?**
 
-Raft is easier to understand and implement correctly. The paper literally says "In Search of an Understandable Consensus Algorithm". For coordinator metadata (not the data path), simplicity matters more than theoretical optimality.
+Raft is easier to understand and implement correctly. The paper literally says "In Search of an Understandable Consensus Algorithm".  For coordinator metadata (not the data path), simplicity matters more than theoretical optimality.
 
 **Q: Why 2PC for writes?**
 
-Strong consistency is non-negotiable for a storage system. 2PC ensures all replicas are in sync or the write fails atomically. Alternative (eventual consistency) would require conflict resolution, which is complex and application-specific.
+Strong consistency is non-negotiable for a storage system. 2PC ensures all replicas are in sync or the write fails atomically.  Alternative (eventual consistency) would require conflict resolution, which is complex and application-specific.
 
 **Q: Why separate coordinator and volume roles?**
 
-**Coordinator:** Lightweight, metadata only (~MB), can run on modest hardware
-**Volume:** Heavy I/O, stores actual data (~TB), needs fast disks
+- **Coordinator:** Lightweight, metadata only (~MB), can run on modest hardware
+- **Volume:** Heavy I/O, stores actual data (~TB), needs fast disks
 
 This separation allows independent scaling: add more coordinators for HA, add more volumes for capacity.
 
@@ -585,53 +611,79 @@ minikv/
 │   │   ├── wal.rs           # Write-Ahead Log
 │   │   └── server.rs        # Server orchestration
 │   └── ops/                 # Operations commands
-│       ├── verify.rs        # Cluster integrity check
-│       ├── repair.rs        # Repair under-replication
+│       ├── verify. rs        # Cluster integrity check
+│       ├── repair. rs        # Repair under-replication
 │       └── compact.rs       # Cluster-wide compaction
 ├── proto/
 │   └── kv.proto             # gRPC protocol definitions
 ├── tests/
-│   └── integration.rs       # Integration tests
+│   └── integration. rs       # Integration tests
 ├── bench/
 │   └── scenarios/           # k6 benchmark scenarios
-│       ├── write-heavy.js   # 90% writes, 10% reads
+│       ├── write-heavy. js   # 90% writes, 10% reads
 │       └── read-heavy.js    # 10% writes, 90% reads
 └── scripts/
     ├── serve.sh             # Start local cluster
     ├── benchmark.sh         # Run all benchmarks
     └── verify.sh            # Verify cluster health
-
 ```
+
 ---
 
 ## 🔧 Development
 
 ### Prerequisites
 
-- **Rust 1.81+** - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-- **Docker** (optional) - For containerized deployment
-- **k6** (optional) - For benchmarks: brew install k6 (macOS) or apt install k6 (Ubuntu)
+```bash
+# Rust 1.81+
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# Docker (optional)
+
+# k6 (optional) - For benchmarks
+brew install k6  # macOS
+apt install k6   # Ubuntu
+```
 
 ### Build & Test
-```
-git clone https://github.com/whispem/minikv
+
+```bash
+# Clone and build
+git clone https://github. com/whispem/minikv
 cd minikv
 cargo build --release
+
+# Run tests
 cargo test
 cargo test --test integration
-RUST_LOG=debug cargo run --bin minikv-coord -- serve --id coord-1
+
+# Run benchmarks
+cargo bench
+
+# Code quality
 cargo fmt --all
 cargo clippy --all-targets -- -D warnings
+
+# Generate documentation
 cargo doc --no-deps --open
 ```
 
 ### Running Tests
 
-```
+```bash
+# Run all tests
 cargo test
+
+# Run specific test
 cargo test test_wal_basic
+
+# Run tests with output
 cargo test -- --nocapture
+
+# Run integration tests
 cargo test --test integration
+
+# Run benchmarks
 cargo bench
 ```
 
@@ -639,42 +691,41 @@ cargo bench
 
 **Enable trace logging:**
 
-```
+```bash
 RUST_LOG=trace ./target/release/minikv-coord serve --id coord-1
 ```
 
 **Use tracing with Jaeger:**
 
-```
+```bash
 docker run -d -p16686:16686 -p4317:4317 jaegertracing/all-in-one:latest
 OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317 ./target/release/minikv-coord serve --id coord-1
 open http://localhost:16686
-
 ```
 
 ### Making Changes
 
 1. **Create a feature branch**
 
-```
+```bash
 git checkout -b feature/my-feature
 ```
 
 2. **Make your changes**
-   - Follow existing code style (run cargo fmt)
+   - Follow existing code style (run `cargo fmt`)
    - Add tests for new features
    - Update documentation
 
 3. **Test thoroughly**
 
-```
+```bash
 cargo test
 cargo clippy --all-targets
 ```
 
 4. **Commit with conventional commits**
 
-```
+```bash
 git commit -m "feat: add automatic rebalancing"
 git commit -m "fix: correct 2PC abort logic"
 git commit -m "docs: update architecture diagram"
@@ -682,15 +733,15 @@ git commit -m "docs: update architecture diagram"
 
 5. **Push and create PR**
 
-```
+```bash
 git push origin feature/my-feature
-
 ```
+
 ---
 
 ## 🤝 Contributing
 
-Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING. md) for guidelines.
 
 ### Areas That Need Help
 
@@ -714,7 +765,7 @@ Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines
 
 ### Code of Conduct
 
-Be respectful, inclusive, and constructive. We're all learning together.
+Be respectful, inclusive, and constructive. We're all learning together. 
 
 ---
 
@@ -722,10 +773,11 @@ Be respectful, inclusive, and constructive. We're all learning together.
 
 MIT License - see [LICENSE](LICENSE)
 
+---
 
 ## 🙏 Acknowledgments
 
-Built by [@whispem](https://github.com/whispem) as a learning project.
+Built by [@whispem](https://github. com/whispem) as a learning project. 
 
 **Inspired by:**
 - [TiKV](https://github.com/tikv/tikv) - Production-grade distributed KV store with Raft
@@ -735,7 +787,7 @@ Built by [@whispem](https://github.com/whispem) as a learning project.
 **Resources that helped:**
 - [The Rust Book](https://doc.rust-lang.org/book/) - Best programming book ever written
 - [Designing Data-Intensive Applications](https://dataintensive.net/) - Martin Kleppmann
-- [Raft Paper](https://raft.github.io/raft.pdf) - In Search of an Understandable Consensus Algorithm
+- [Raft Paper](https://raft.github. io/raft.pdf) - In Search of an Understandable Consensus Algorithm
 - [Tokio Tutorial](https://tokio.rs/tokio/tutorial) - Async Rust
 - [gRPC Rust Tutorial](https://github.com/hyperium/tonic) - Tonic documentation
 
@@ -760,4 +812,4 @@ If you find this project useful, please consider giving it a star! ⭐
 
 ---
 
-[⬆ Back to Top](#minikv-)
+[⬆ Back to Top](#-minikv)
