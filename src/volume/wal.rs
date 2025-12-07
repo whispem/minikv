@@ -69,19 +69,19 @@ impl Wal {
         };
 
         let mut reader = BufReader::new(file);
-        let mut max_seq = 0u64;
+        let mut max_seq = None;
 
         loop {
             match Self::read_entry_internal(&mut reader) {
                 Ok(Some(entry)) => {
-                    max_seq = max_seq.max(entry.sequence);
+                    max_seq = Some(max_seq.unwrap_or(0).max(entry.sequence));
                 }
                 Ok(None) => break,
                 Err(_) => break, // Corrupted entry, stop reading
             }
         }
 
-        Ok(max_seq + 1)
+        Ok(max_seq.map(|s| s + 1).unwrap_or(0))
     }
 
     /// Append a PUT operation
@@ -313,18 +313,19 @@ mod tests {
         let dir = tempdir().unwrap();
         let wal_path = dir.path().join("test.wal");
 
-        let mut wal = Wal::open(&wal_path, WalSyncPolicy::Always).unwrap();
+        {
+            let mut wal = Wal::open(&wal_path, WalSyncPolicy::Always).unwrap();
 
-        let seq1 = wal.append_put("key1", b"value1").unwrap();
-        let seq2 = wal.append_put("key2", b"value2").unwrap();
-        let seq3 = wal.append_delete("key1").unwrap();
+            let seq1 = wal.append_put("key1", b"value1").unwrap();
+            let seq2 = wal.append_put("key2", b"value2").unwrap();
+            let seq3 = wal.append_delete("key1").unwrap();
 
-        assert_eq!(seq1, 0);
-        assert_eq!(seq2, 1);
-        assert_eq!(seq3, 2);
+            assert_eq!(seq1, 0);
+            assert_eq!(seq2, 1);
+            assert_eq!(seq3, 2);
 
-        wal.sync().unwrap();
-        drop(wal);
+            wal.sync().unwrap();
+        }
 
         // Replay
         let mut entries = Vec::new();
@@ -363,9 +364,11 @@ mod tests {
         // Reopen and append more
         {
             let mut wal = Wal::open(&wal_path, WalSyncPolicy::Always).unwrap();
+            // After 2 entries (seq 0, 1), next_sequence should be 2
             assert_eq!(wal.next_sequence, 2);
             let seq = wal.append_put("key3", b"value3").unwrap();
             assert_eq!(seq, 2);
+            wal.sync().unwrap();
         }
 
         // Verify all entries

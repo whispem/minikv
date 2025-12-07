@@ -106,15 +106,15 @@ async fn main() -> anyhow::Result<()> {
             println!("  Bytes freed: {}", report.bytes_freed);
         }
 
-        Commands::Put { key, file } => {
+        Commands::Put { key: _, file: _ } => {
             println!("PUT not yet implemented");
         }
 
-        Commands::Get { key, output } => {
+        Commands::Get { key: _, output: _ } => {
             println!("GET not yet implemented");
         }
 
-        Commands::Delete { key } => {
+        Commands::Delete { key: _ } => {
             println!("DELETE not yet implemented");
         }
     }

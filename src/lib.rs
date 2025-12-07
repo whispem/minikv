@@ -8,6 +8,8 @@
 //! - Bloom filters and index snapshots for performance
 //!
 //! ## Architecture
+
+#![allow(clippy::result_large_err)]
 //!
 //! ```text
 //! ┌─────────────────────────────────────────┐

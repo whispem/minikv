@@ -19,6 +19,7 @@ pub fn encode_key(key: &str) -> String {
 }
 
 /// Decode a percent-encoded key
+#[allow(clippy::result_large_err)]
 pub fn decode_key(encoded: &str) -> crate::Result<String> {
     percent_decode_str(encoded)
         .decode_utf8()
@@ -41,14 +42,15 @@ pub fn format_bytes(bytes: u64) -> String {
 }
 
 /// Parse duration string (e.g., "30s", "5m", "1h", "7d")
+#[allow(clippy::result_large_err)]
 pub fn parse_duration(s: &str) -> crate::Result<std::time::Duration> {
     let s = s.trim();
     if s.is_empty() {
         return Err(crate::Error::InvalidConfig("empty duration".into()));
     }
 
-    let (num_str, unit) = if s.ends_with("ms") {
-        (&s[..s.len() - 2], "ms")
+    let (num_str, unit) = if let Some(stripped) = s.strip_suffix("ms") {
+        (stripped, "ms")
     } else {
         let _unit = s.chars().last().unwrap(); // préfixé _ pour éviter warning
         (&s[..s.len() - 1], &s[s.len() - 1..])
@@ -174,6 +176,7 @@ pub fn crc32(data: &[u8]) -> u32 {
 }
 
 /// Validate key (must be non-empty, reasonable length)
+#[allow(clippy::result_large_err)]
 pub fn validate_key(key: &str) -> crate::Result<()> {
     if key.is_empty() {
         return Err(crate::Error::InvalidConfig("key cannot be empty".into()));

@@ -54,6 +54,7 @@ pub struct MetadataStore {
 
 impl MetadataStore {
     /// Open or create metadata store
+    #[allow(clippy::result_large_err)]
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
         let mut opts = Options::default();
         opts.create_if_missing(true);
@@ -67,6 +68,7 @@ impl MetadataStore {
     // === Key operations ===
 
     /// Put key metadata
+    #[allow(clippy::result_large_err)]
     pub fn put_key(&self, meta: &KeyMetadata) -> Result<()> {
         let cf = self.db.cf_handle(CF_KEYS).unwrap();
         let value = bincode::serialize(meta)
@@ -76,6 +78,7 @@ impl MetadataStore {
     }
 
     /// Get key metadata
+    #[allow(clippy::result_large_err)]
     pub fn get_key(&self, key: &str) -> Result<Option<KeyMetadata>> {
         let cf = self.db.cf_handle(CF_KEYS).unwrap();
         match self.db.get_cf(cf, key.as_bytes())? {
@@ -89,6 +92,7 @@ impl MetadataStore {
     }
 
     /// Delete key metadata
+    #[allow(clippy::result_large_err)]
     pub fn delete_key(&self, key: &str) -> Result<()> {
         let cf = self.db.cf_handle(CF_KEYS).unwrap();
         self.db.delete_cf(cf, key.as_bytes())?;

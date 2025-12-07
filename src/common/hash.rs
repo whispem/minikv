@@ -224,10 +224,17 @@ mod tests {
         ring.assign_shard(1, nodes.clone());
 
         assert_eq!(ring.get_shard_nodes(0), Some(nodes.as_slice()));
-        assert_eq!(
-            ring.get_nodes("key-maps-to-shard-0"),
-            Some(nodes.as_slice())
-        );
+        // Find a key that maps to shard 0
+        let mut found_key = None;
+        for i in 0..10000 {
+            let candidate = format!("key-{}", i);
+            if shard_key(&candidate, 256) == 0 {
+                found_key = Some(candidate);
+                break;
+            }
+        }
+        let key = found_key.expect("No key found for shard 0");
+        assert_eq!(ring.get_nodes(&key), Some(nodes.as_slice()));
     }
 
     #[test]

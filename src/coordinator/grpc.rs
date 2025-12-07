@@ -6,6 +6,12 @@ use tonic::{Request, Response, Status};
 
 pub struct CoordGrpcService {}
 
+impl Default for CoordGrpcService {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CoordGrpcService {
     pub fn new() -> Self {
         Self {}

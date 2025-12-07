@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 pub struct VolumeServer {
+    #[allow(dead_code)]
     store: Arc<Mutex<BlobStore>>,
 }
 

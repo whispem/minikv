@@ -169,21 +169,16 @@ fn default_true() -> bool {
     true
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum WalSyncPolicy {
     /// fsync after every write
+    #[default]
     Always,
     /// fsync periodically
     Interval,
     /// Never fsync (fastest, least durable)
     Never,
-}
-
-impl Default for WalSyncPolicy {
-    fn default() -> Self {
-        WalSyncPolicy::Always
-    }
 }
 
 impl Default for VolumeConfig {
@@ -238,6 +233,7 @@ impl Default for RuntimeConfig {
 
 impl Config {
     /// Load from file
+    #[allow(clippy::result_large_err)]
     pub fn from_file(path: impl AsRef<std::path::Path>) -> crate::Result<Self> {
         let content = std::fs::read_to_string(path)?;
         let config: Config = serde_json::from_str(&content)
@@ -246,6 +242,7 @@ impl Config {
     }
 
     /// Save to file
+    #[allow(clippy::result_large_err)]
     pub fn to_file(&self, path: impl AsRef<std::path::Path>) -> crate::Result<()> {
         let content = serde_json::to_string_pretty(self)
             .map_err(|e| crate::Error::Other(format!("Failed to serialize config: {}", e)))?;
@@ -254,6 +251,7 @@ impl Config {
     }
 
     /// Validate configuration
+    #[allow(clippy::result_large_err)]
     pub fn validate(&self) -> crate::Result<()> {
         if self.node_id.is_empty() {
             return Err(crate::Error::InvalidConfig("node_id is required".into()));

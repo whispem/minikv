@@ -1,6 +1,7 @@
 use crate::volume::blob::BlobStore;
 
 pub struct VolumeGrpcService {
+    #[allow(dead_code)]
     store: BlobStore,
 }
 
