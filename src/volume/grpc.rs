@@ -49,7 +49,7 @@ impl VolumeInternal for VolumeGrpcService {
         &self,
         req: Request<CommitRequest>,
     ) -> Result<Response<CommitResponse>, Status> {
-        let inner = req.into_inner();
+    let _inner = req.into_inner();
 
         // For now, we just acknowledge
         // In production: finalize the transaction, make data durable
@@ -61,7 +61,7 @@ impl VolumeInternal for VolumeGrpcService {
     }
 
     async fn abort(&self, req: Request<AbortRequest>) -> Result<Response<AbortResponse>, Status> {
-        let inner = req.into_inner();
+    let _inner = req.into_inner();
 
         // Clean up any prepared state
         // In production: delete temp files, release locks
