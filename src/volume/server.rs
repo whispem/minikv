@@ -1,5 +1,5 @@
-use crate::volume::blob::BlobStore;
 use crate::common::{Result, WalSyncPolicy};
+use crate::volume::blob::BlobStore;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
