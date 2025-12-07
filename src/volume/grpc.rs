@@ -51,6 +51,8 @@ impl VolumeInternal for VolumeGrpcService {
     ) -> Result<Response<CommitResponse>, Status> {
         let _inner = req.into_inner();
 
+    // CI trigger: commit for relaunch
+
         // For now, we just acknowledge
         // In production: finalize the transaction, make data durable
 
