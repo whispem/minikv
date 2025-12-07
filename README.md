@@ -452,7 +452,7 @@ read_success....: 99.82% ✓ 31945  ✗ 58
 
 ### 🌟 From Zero to Distributed in 31 Days
 
-**Background:** Started learning Rust on **October 27, 2025**.  Zero programming experience before that (I studied languages 🇫🇷). 
+**Background:** Started learning Rust on **October 27, 2025**.  Zero programming experience before that (I studied languages - italian & english at Aix-Marseille University). 
 
 **Timeline:**
 
