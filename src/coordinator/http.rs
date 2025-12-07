@@ -51,19 +51,25 @@ async fn put_key(
     _body: Bytes,
 ) -> impl IntoResponse {
     // TODO: Implement 2PC
-    (StatusCode::NOT_IMPLEMENTED, format!("PUT {} - 2PC not yet implemented", key))
+    (
+        StatusCode::NOT_IMPLEMENTED,
+        format!("PUT {} - 2PC not yet implemented", key),
+    )
 }
 
-async fn get_key(
-    State(_state): State<CoordState>,
-    Path(key): Path<String>,
-) -> impl IntoResponse {
-    (StatusCode::NOT_IMPLEMENTED, format!("GET {} not implemented", key))
+async fn get_key(State(_state): State<CoordState>, Path(key): Path<String>) -> impl IntoResponse {
+    (
+        StatusCode::NOT_IMPLEMENTED,
+        format!("GET {} not implemented", key),
+    )
 }
 
 async fn delete_key(
     State(_state): State<CoordState>,
     Path(key): Path<String>,
 ) -> impl IntoResponse {
-    (StatusCode::NOT_IMPLEMENTED, format!("DELETE {} not implemented", key))
+    (
+        StatusCode::NOT_IMPLEMENTED,
+        format!("DELETE {} not implemented", key),
+    )
 }

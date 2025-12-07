@@ -26,7 +26,7 @@ impl VolumeClient {
             expected_blake3,
         });
 
-        let response = self.client. prepare(request).await?;
+        let response = self.client.prepare(request).await?;
         Ok(response.into_inner())
     }
 
@@ -47,7 +47,7 @@ impl VolumeClient {
     ) -> Result<AbortResponse, Box<dyn std::error::Error>> {
         let request = tonic::Request::new(AbortRequest { upload_id });
 
-        let response = self.client. abort(request).await?;
+        let response = self.client.abort(request).await?;
         Ok(response.into_inner())
     }
 }

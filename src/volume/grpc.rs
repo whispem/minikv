@@ -27,7 +27,7 @@ impl VolumeInternal for VolumeGrpcService {
         req: Request<PrepareRequest>,
     ) -> Result<Response<PrepareResponse>, Status> {
         let inner = req.into_inner();
-        
+
         // Validate request
         if inner.key.is_empty() {
             return Ok(Response::new(PrepareResponse {
@@ -38,7 +38,7 @@ impl VolumeInternal for VolumeGrpcService {
 
         // Check if we have space (simplified check)
         // In production: check disk space, quotas, etc.
-        
+
         Ok(Response::new(PrepareResponse {
             ok: true,
             error: String::new(),
@@ -50,34 +50,26 @@ impl VolumeInternal for VolumeGrpcService {
         req: Request<CommitRequest>,
     ) -> Result<Response<CommitResponse>, Status> {
         let inner = req.into_inner();
-        
+
         // For now, we just acknowledge
         // In production: finalize the transaction, make data durable
-        
+
         Ok(Response::new(CommitResponse {
             ok: true,
             error: String::new(),
         }))
     }
 
-    async fn abort(
-        &self,
-        req: Request<AbortRequest>,
-    ) -> Result<Response<AbortResponse>, Status> {
+    async fn abort(&self, req: Request<AbortRequest>) -> Result<Response<AbortResponse>, Status> {
         let inner = req.into_inner();
-        
+
         // Clean up any prepared state
         // In production: delete temp files, release locks
-        
-        Ok(Response::new(AbortResponse {
-            ok: true,
-        }))
+
+        Ok(Response::new(AbortResponse { ok: true }))
     }
 
-    async fn pull(
-        &self,
-        _req: Request<PullRequest>,
-    ) -> Result<Response<Self::PullStream>, Status> {
+    async fn pull(&self, _req: Request<PullRequest>) -> Result<Response<Self::PullStream>, Status> {
         Err(Status::unimplemented("Pull not implemented"))
     }
 
@@ -86,8 +78,8 @@ impl VolumeInternal for VolumeGrpcService {
         req: Request<DeleteRequest>,
     ) -> Result<Response<DeleteResponse>, Status> {
         let inner = req.into_inner();
-        
-        match self.store.lock(). unwrap().delete(&inner.key) {
+
+        match self.store.lock().unwrap().delete(&inner.key) {
             Ok(_) => Ok(Response::new(DeleteResponse {
                 ok: true,
                 error: String::new(),
@@ -99,10 +91,7 @@ impl VolumeInternal for VolumeGrpcService {
         }
     }
 
-    async fn ping(
-        &self,
-        _req: Request<PingRequest>,
-    ) -> Result<Response<PingResponse>, Status> {
+    async fn ping(&self, _req: Request<PingRequest>) -> Result<Response<PingResponse>, Status> {
         Ok(Response::new(PingResponse {
             volume_id: "vol-1".to_string(),
             uptime_secs: 0,
@@ -111,10 +100,7 @@ impl VolumeInternal for VolumeGrpcService {
         }))
     }
 
-    async fn stats(
-        &self,
-        _req: Request<StatsRequest>,
-    ) -> Result<Response<StatsResponse>, Status> {
+    async fn stats(&self, _req: Request<StatsRequest>) -> Result<Response<StatsResponse>, Status> {
         Ok(Response::new(StatsResponse {
             total_keys: 0,
             total_bytes: 0,
