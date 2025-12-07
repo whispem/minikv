@@ -7,13 +7,15 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     build-essential \
     pkg-config \
+    librocksdb-dev \
     protobuf-compiler \
+    libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy manifests
 COPY Cargo.toml ./
-   COPY Cargo.lock* ./
-   RUN test -f Cargo.lock || cargo generate-lockfile
+COPY Cargo.lock* ./
+RUN test -f Cargo.lock || cargo generate-lockfile
 COPY build.rs ./
 COPY proto ./proto
 
@@ -32,6 +34,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     curl \
+    librocksdb-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy binary
