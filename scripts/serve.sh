@@ -6,7 +6,7 @@ set -euo pipefail
 NUM_COORDS="${1:-3}"
 NUM_VOLUMES="${2:-3}"
 
-echo "🚀 Starting minikv cluster"
+echo "Starting minikv cluster"
 echo "  Coordinators: ${NUM_COORDS}"
 echo "  Volumes: ${NUM_VOLUMES}"
 echo ""
@@ -71,7 +71,7 @@ for i in $(seq 1 ${NUM_VOLUMES}); do
 done
 
 echo ""
-echo "✅ Cluster started!"
+echo "Cluster started!"
 echo ""
 echo "Coordinator: http://127.0.0.1:5000"
 echo "Logs: ./data/*.log"
