@@ -25,7 +25,8 @@ COPY src ./src
 # Build coordinator binary
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/app/target \
-    cargo build --release --bin minikv-coord
+    cargo build --release --bin minikv-coord && \
+    cp /app/target/release/minikv-coord /app/minikv-coord
 
 # Runtime stage
 FROM debian:bookworm-slim
@@ -40,7 +41,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy binary
-COPY --from=builder /app/target/release/minikv-coord /usr/local/bin/minikv-coord
+COPY --from=builder /app/minikv-coord /usr/local/bin/minikv-coord
 
 # Create data directory
 RUN mkdir -p /data

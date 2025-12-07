@@ -25,7 +25,8 @@ COPY src ./src
 # Build volume binary
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/app/target \
-    cargo build --release --bin minikv-volume
+    cargo build --release --bin minikv-volume && \
+    cp /app/target/release/minikv-volume /app/minikv-volume
 
 # Runtime stage
 FROM debian:bookworm-slim
@@ -40,7 +41,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy binary
-COPY --from=builder /app/target/release/minikv-volume /usr/local/bin/minikv-volume
+COPY --from=builder /app/minikv-volume /usr/local/bin/minikv-volume
 
 # Create data directories
 RUN mkdir -p /data/blobs /data/wal
