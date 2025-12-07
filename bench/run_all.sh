@@ -6,7 +6,7 @@ set -euo pipefail
 RESULTS_DIR="bench/results/$(date +%Y%m%d-%H%M%S)"
 mkdir -p "${RESULTS_DIR}"
 
-echo "🏃 Running all benchmark scenarios"
+echo "Running all benchmark scenarios"
 echo "Results will be saved to: ${RESULTS_DIR}"
 echo ""
 
@@ -33,7 +33,7 @@ for scenario in "${scenarios[@]}"; do
     IFS=':' read -r name desc <<< "$scenario"
     
     echo ""
-    echo "📊 Running: ${desc}"
+    echo "Running: ${desc}"
     echo "─────────────────────────────────"
     
     k6 run \
@@ -46,7 +46,7 @@ for scenario in "${scenarios[@]}"; do
 done
 
 echo ""
-echo "✅ All benchmarks completed!"
+echo "All benchmarks completed!"
 echo "Results: ${RESULTS_DIR}"
 
 # Generate summary report
