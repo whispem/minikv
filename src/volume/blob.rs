@@ -7,11 +7,10 @@
 //! - WAL for durability
 //! - Index snapshots for fast restarts
 
-use crate::common::{blake3_hash, blob_prefix, crc32, encode_key, Result, WalSyncPolicy};
+use crate::common::{blake3_hash, blob_prefix, crc32, Result, WalSyncPolicy};
 use crate::volume::index::{BlobLocation, Index};
 use crate::volume::wal::{Wal, WalOp};
 use bloomfilter::Bloom;
-use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
@@ -68,7 +67,8 @@ impl BlobStore {
         };
 
         // Initialize bloom filter
-        let mut bloom: Bloom<[u8; 32]> = Bloom::new_for_fp_rate(100_000, 0.01);
+        let mut bloom: Bloom<[u8; 32]> = Bloom::new_for_fp_rate(100_000, 0.01)
+            .expect("Failed to create bloom filter");
 
         // Open WAL
         let wal_file = wal_path.join("wal.log");
@@ -210,7 +210,7 @@ impl BlobStore {
                 let location =
                     self.write_blob_to_segment(&temp_path, new_segment, new_offset, key, &value)?;
 
-                new_index.insert(key.clone(), location);
+                new_index.insert(key.clone(), location.clone());
 
                 new_offset = location.offset + location.size + 16; // header + data + crc
 
