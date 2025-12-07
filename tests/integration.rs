@@ -1,5 +1,5 @@
-use std::path::PathBuf;
 use minikv::volume::blob::BlobStore;
+use std::path::PathBuf;
 
 #[test]
 fn test_store_creation() {
