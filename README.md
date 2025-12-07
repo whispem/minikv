@@ -318,22 +318,25 @@ Writes: select different volume for new data
   ↓
 Background repair job (optional):
   Copy under-replicated data to healthy volumes
-
+```
 ---
 
 ## 📊 Performance
 
 ### Benchmarks
 
+```
 **Hardware:** MacBook M4, 16GB RAM, NVMe SSD
 
 **Single-node baseline** (mini-kvstore-v2):
 
 Writes:  240,000 ops/sec (no replication)
 Reads:   11,000,000 ops/sec (in-memory index)
+```
 
 **Distributed cluster** (3 coordinators + 3 volumes, replication factor = 3):
 
+```
 Writes:  80,000 ops/sec (2PC + 3x replication)
 Reads:   8,000,000 ops/sec (distributed reads)
 
@@ -361,7 +364,7 @@ write_latency...: avg=12.3ms min=3.2ms med=8.1ms max=89.4ms p(90)=18.7ms p(95)=2
 read_latency....: avg=2.1ms  min=0.4ms med=1.3ms max=45.2ms p(90)=3.8ms  p(95)=5.1ms
 write_success...: 87.34% ✓ 69872  ✗ 10128
 read_success....: 99.82% ✓ 31945  ✗ 58
-
+```
 ---
 
 ## 🚀 Features
@@ -555,6 +558,7 @@ Balances three factors:
 
 ### Code Structure
 
+```
 minikv/
 ├── src/
 │   ├── bin/
@@ -597,6 +601,7 @@ minikv/
     ├── benchmark.sh         # Run all benchmarks
     └── verify.sh            # Verify cluster health
 
+```
 ---
 
 ## 🔧 Development
@@ -608,7 +613,7 @@ minikv/
 - **k6** (optional) - For benchmarks: brew install k6 (macOS) or apt install k6 (Ubuntu)
 
 ### Build & Test
-
+```
 git clone https://github.com/whispem/minikv
 cd minikv
 cargo build --release
@@ -618,32 +623,42 @@ RUST_LOG=debug cargo run --bin minikv-coord -- serve --id coord-1
 cargo fmt --all
 cargo clippy --all-targets -- -D warnings
 cargo doc --no-deps --open
+```
 
 ### Running Tests
 
+```
 cargo test
 cargo test test_wal_basic
 cargo test -- --nocapture
 cargo test --test integration
 cargo bench
+```
 
 ### Debugging
 
 **Enable trace logging:**
 
+```
 RUST_LOG=trace ./target/release/minikv-coord serve --id coord-1
+```
 
 **Use tracing with Jaeger:**
 
+```
 docker run -d -p16686:16686 -p4317:4317 jaegertracing/all-in-one:latest
 OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317 ./target/release/minikv-coord serve --id coord-1
 open http://localhost:16686
+
+```
 
 ### Making Changes
 
 1. **Create a feature branch**
 
+```
 git checkout -b feature/my-feature
+```
 
 2. **Make your changes**
    - Follow existing code style (run cargo fmt)
@@ -652,19 +667,25 @@ git checkout -b feature/my-feature
 
 3. **Test thoroughly**
 
+```
 cargo test
 cargo clippy --all-targets
+```
 
 4. **Commit with conventional commits**
 
+```
 git commit -m "feat: add automatic rebalancing"
 git commit -m "fix: correct 2PC abort logic"
 git commit -m "docs: update architecture diagram"
+```
 
 5. **Push and create PR**
 
+```
 git push origin feature/my-feature
 
+```
 ---
 
 ## 🤝 Contributing
@@ -701,27 +722,6 @@ Be respectful, inclusive, and constructive. We're all learning together.
 
 MIT License - see [LICENSE](LICENSE)
 
-Copyright (c) 2025 Em'
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
----
 
 ## 🙏 Acknowledgments
 
