@@ -364,6 +364,11 @@ impl BlobStore {
 EOFBLOB
 
 echo -e "${GREEN}✓${NC} Complete BlobStore implementation installed"
+
+# Format blob.rs immediately to match rustfmt preferences
+echo -e "${YELLOW}  Formatting blob.rs...${NC}"
+cargo fmt -- src/volume/blob.rs 2>/dev/null || true
+echo -e "${GREEN}✓${NC} blob.rs formatted"
 echo ""
 
 # ===== FIX 1: tests/integration.rs =====
