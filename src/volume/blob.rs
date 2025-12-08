@@ -6,13 +6,11 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
-
 const BLOB_MAGIC: [u8; 4] = [0x42, 0x4C, 0x4F, 0x42];
 const SEGMENT_SIZE: u64 = 64 * 1024 * 1024;
 const MAX_SEGMENTS: u64 = 1000;
 
 #[derive(Debug)]
-
 #[derive(Clone)]
 pub struct StoreStats {
     pub total_keys: usize,
@@ -24,7 +22,7 @@ pub struct StoreStats {
 
 pub struct BlobStore {
     data_path: PathBuf,
-  
+
     index: Index,
     bloom: Bloom<[u8; 32]>,
     wal: Wal,
@@ -87,7 +85,7 @@ impl BlobStore {
 
         Ok(Self {
             data_path: data_path.to_path_buf(),
-            
+
             index,
             bloom,
             wal,
