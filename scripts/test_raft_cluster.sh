@@ -6,7 +6,7 @@ PORTS=(50051 50052 50053)
 IDS=(node1 node2 node3)
 
 for i in {0..2}; do
-  echo "Lancement du coordinator ${IDS[$i]} sur le port ${PORTS[$i]}..."
+  echo "Starting coordinator ${IDS[$i]} on port ${PORTS[$i]}..."
   RUST_LOG=info ./target/debug/coord \
     --id ${IDS[$i]} \
     --port ${PORTS[$i]} \
@@ -17,7 +17,7 @@ done
 
 sleep 5
 
-echo "Affichage des rôles et logs :"
+echo "Roles and logs:"
 for i in {0..2}; do
   echo "--- ${IDS[$i]} ---"
   grep -E "leader|candidate|follower|AppendEntries" logs_${IDS[$i]}.txt || true
@@ -26,10 +26,10 @@ done
 
 LEADER_PID=$(ps aux | grep coord | grep leader | awk '{print $2}' | head -n1)
 if [ -n "$LEADER_PID" ]; then
-  echo "Kill du leader PID $LEADER_PID"
+  echo "Killing leader PID $LEADER_PID"
   kill $LEADER_PID
   sleep 5
-  echo "Nouvelle élection :"
+  echo "New election:"
   for i in {0..2}; do
     echo "--- ${IDS[$i]} ---"
     grep -E "leader|candidate|follower|AppendEntries" logs_${IDS[$i]}.txt || true
