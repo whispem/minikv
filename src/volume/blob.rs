@@ -10,8 +10,7 @@ const BLOB_MAGIC: [u8; 4] = [0x42, 0x4C, 0x4F, 0x42];
 const SEGMENT_SIZE: u64 = 64 * 1024 * 1024;
 const MAX_SEGMENTS: u64 = 1000;
 
-#[derive(Debug)]
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct StoreStats {
     pub total_keys: usize,
     pub total_bytes: u64,
