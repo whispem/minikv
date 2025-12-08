@@ -29,8 +29,8 @@ impl CoordinatorInternal for CoordGrpcService {
         req: Request<VoteRequest>,
     ) -> Result<Response<VoteResponse>, Status> {
         let vote_req = req.into_inner();
-        
-        let current_term = 1; 
+
+        let current_term = 1;
         let vote_granted = vote_req.term >= current_term;
         let resp = VoteResponse {
             term: current_term,
@@ -44,8 +44,8 @@ impl CoordinatorInternal for CoordGrpcService {
         req: Request<AppendRequest>,
     ) -> Result<Response<AppendResponse>, Status> {
         let append_req = req.into_inner();
-        
-        let current_term = 1; 
+
+        let current_term = 1;
         let success = append_req.term >= current_term;
         let resp = AppendResponse {
             term: current_term,
