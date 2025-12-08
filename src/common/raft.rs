@@ -1,6 +1,6 @@
-//! Structures de messages Raft pour la communication entre nœuds
+//! Raft message structures for communication between nodes
 
-// Structures alignées sur le proto kv.proto
+// Structures aligned with kv.proto
 #[derive(Debug, Clone)]
 pub struct VoteRequest {
     pub term: u64,
