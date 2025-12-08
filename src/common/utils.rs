@@ -52,7 +52,7 @@ pub fn parse_duration(s: &str) -> crate::Result<std::time::Duration> {
     let (num_str, unit) = if let Some(stripped) = s.strip_suffix("ms") {
         (stripped, "ms")
     } else {
-        let _unit = s.chars().last().unwrap(); // préfixé _ pour éviter warning
+        let _unit = s.chars().last().unwrap(); 
         (&s[..s.len() - 1], &s[s.len() - 1..])
     };
 
