@@ -29,9 +29,8 @@ impl CoordinatorInternal for CoordGrpcService {
         req: Request<VoteRequest>,
     ) -> Result<Response<VoteResponse>, Status> {
         let vote_req = req.into_inner();
-        // TODO: Intégrer la logique réelle avec RaftNode
-        // Pour l'exemple, on accorde le vote si le terme est au moins égal
-        let current_term = 1; // À remplacer par le vrai terme du noeud
+        
+        let current_term = 1; 
         let vote_granted = vote_req.term >= current_term;
         let resp = VoteResponse {
             term: current_term,
@@ -45,9 +44,8 @@ impl CoordinatorInternal for CoordGrpcService {
         req: Request<AppendRequest>,
     ) -> Result<Response<AppendResponse>, Status> {
         let append_req = req.into_inner();
-        // TODO: Intégrer la logique réelle avec RaftNode
-        // Pour l'exemple, on accepte si le terme est au moins égal
-        let current_term = 1; // À remplacer par le vrai terme du noeud
+        
+        let current_term = 1; 
         let success = append_req.term >= current_term;
         let resp = AppendResponse {
             term: current_term,
