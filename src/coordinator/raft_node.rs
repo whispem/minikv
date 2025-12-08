@@ -35,15 +35,12 @@ pub struct RaftNode {
 }
 
 impl RaftNode {
-   
     pub fn get_log(&self) -> std::sync::MutexGuard<'_, Vec<crate::common::raft::LogEntry>> {
         self.log.lock().unwrap()
     }
-   
-    pub async fn send_heartbeats(&self) {
-        
-    }
-    
+
+    pub async fn send_heartbeats(&self) {}
+
     pub fn handle_request_vote(
         &self,
         req: crate::common::raft::VoteRequest,
@@ -71,7 +68,6 @@ impl RaftNode {
         }
     }
 
-   
     pub fn handle_append_entries(
         &self,
         req: crate::common::raft::AppendRequest,
@@ -103,11 +99,10 @@ impl RaftNode {
         }
     }
 
-    
     pub async fn start_election_and_collect_votes(&self, peers: Vec<String>) -> bool {
         let new_term = self.start_election();
-        let mut votes = 1; 
-                                       
+        let mut votes = 1;
+
         if !peers.is_empty() {
             votes += peers.len();
         }
