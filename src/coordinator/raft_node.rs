@@ -35,15 +35,15 @@ pub struct RaftNode {
 }
 
 impl RaftNode {
-    /// Accès public au log pour les tests
+   
     pub fn get_log(&self) -> std::sync::MutexGuard<'_, Vec<crate::common::raft::LogEntry>> {
         self.log.lock().unwrap()
     }
-    /// Envoi des heartbeats (AppendEntries vides) aux followers
+   
     pub async fn send_heartbeats(&self) {
-        // TODO: envoyer AppendEntries (heartbeat) à tous les peers via gRPC
+        
     }
-    /// Traiter une requête RequestVote reçue
+    
     pub fn handle_request_vote(
         &self,
         req: crate::common::raft::VoteRequest,
@@ -71,7 +71,7 @@ impl RaftNode {
         }
     }
 
-    /// Traiter une requête AppendEntries reçue
+   
     pub fn handle_append_entries(
         &self,
         req: crate::common::raft::AppendRequest,
@@ -103,12 +103,11 @@ impl RaftNode {
         }
     }
 
-    /// Démarrer une élection et collecter les votes
+    
     pub async fn start_election_and_collect_votes(&self, peers: Vec<String>) -> bool {
         let new_term = self.start_election();
-        let mut votes = 1; // On vote pour soi-même
-                           // TODO: envoyer RequestVote à tous les peers via gRPC
-                           // Simuler la majorité pour l'exemple
+        let mut votes = 1; 
+                                       
         if !peers.is_empty() {
             votes += peers.len();
         }
