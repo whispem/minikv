@@ -1,13 +1,10 @@
 #!/bin/bash
-# Script de test pour lancer 3 coordinators Raft et observer l'élection et la réplication
 
 set -e
 
-# Ports et IDs
 PORTS=(50051 50052 50053)
 IDS=(node1 node2 node3)
 
-# Lancer les 3 coordinators en arrière-plan
 for i in {0..2}; do
   echo "Lancement du coordinator ${IDS[$i]} sur le port ${PORTS[$i]}..."
   RUST_LOG=info ./target/debug/coord \
@@ -27,7 +24,6 @@ for i in {0..2}; do
   echo ""
 done
 
-# Test de failover : kill le leader
 LEADER_PID=$(ps aux | grep coord | grep leader | awk '{print $2}' | head -n1)
 if [ -n "$LEADER_PID" ]; then
   echo "Kill du leader PID $LEADER_PID"
@@ -41,5 +37,4 @@ if [ -n "$LEADER_PID" ]; then
   done
 fi
 
-# Nettoyage
 trap 'kill ${PIDS[@]}' EXIT
