@@ -1,9 +1,7 @@
 //! Metadata store using RocksDB
 //!
-//! Stores:
-//! - Key metadata (replicas, size, blake3, timestamps)
-//! - Volume registry (node_id → address, state, shards)
-//! - Cluster configuration
+//! This module provides persistent storage for cluster metadata.
+//! It stores key metadata (replicas, size, hash, timestamps), volume registry (node_id to address, state, shards), and cluster configuration.
 
 use crate::common::{NodeState, Result};
 use rocksdb::{Options, DB};
@@ -15,6 +13,7 @@ const CF_VOLUMES: &str = "volumes";
 const CF_CONFIG: &str = "config";
 
 /// Key metadata
+/// Describes the state and replica set for a single key in the cluster.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KeyMetadata {
     pub key: String,
@@ -34,6 +33,7 @@ pub enum KeyState {
 }
 
 /// Volume metadata
+/// Describes a single volume in the cluster, including its address, state, and assigned shards.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VolumeMetadata {
     pub volume_id: String,

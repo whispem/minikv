@@ -1,6 +1,6 @@
 [package]
 name = "minikv"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = ["Em' <whispem@users.noreply.github.com>"]
 description = "A production-grade distributed KV store with Raft consensus in ~1,500 lines"
@@ -54,7 +54,7 @@ hex = "0.4"
 reqwest = { version = "0.12", features = ["stream"] }
 tokio-stream = "0.1"
 uuid = { version = "1.19.0", features = ["v4"] }
-rand = "0.9.2"
+rand = "0.8"
 
 [build-dependencies]
 tonic-build = "0.12"

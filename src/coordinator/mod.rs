@@ -12,6 +12,7 @@ pub mod http;
 pub mod metadata;
 pub mod placement;
 pub mod raft_node;
+pub mod raft_rpc_client;
 pub mod server;
 pub mod volume_client;
 

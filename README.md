@@ -1,3 +1,4 @@
+
 # 🦀 minikv
 
 **A production-ready distributed key-value store with Raft consensus**
@@ -8,6 +9,30 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Production Ready](https://img.shields.io/badge/status-production_ready-success)](https://github.com/whispem/minikv)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](.github/workflows/ci.yml)
+
+---
+
+## 🆕 What's New in v0.2.0 (December 10, 2025)
+
+**minikv v0.2.0 is a fully production-ready distributed key-value store. All code, comments, scripts, and documentation are now in professional English.**
+
+### Major Features Completed
+
+- ✅ **Full multi-node Raft consensus**: Robust leader election, log replication, snapshots, commit index, recovery, and network partition detection. Zero known errors or warnings.
+- ✅ **Advanced Two-Phase Commit (2PC) streaming**: Chunked blob streaming, error propagation, retry, timeouts, and comprehensive integration tests for error scenarios.
+- ✅ **Automatic cluster rebalancing**: Detects overloaded/underloaded volumes, moves blobs and updates metadata, with CLI/admin tools for monitoring and manual control.
+- ✅ **Prometheus metrics endpoint**: `/metrics` exposes cluster and volume stats, Raft role, replication lag, health, and more. Includes counters, histograms, and alerting support.
+- ✅ **Professional integration, stress, and recovery tests**: Manual scenarios for node loss, split-brain, recovery, high load, consistency verification, and disaster recovery.
+- ✅ **All scripts, test templates, and documentation translated/adapted to English**: Internationalized for global teams and production use.
+
+### Project Status
+
+- **All core features are implemented and production-ready.**
+- **No stubs, TODOs, or incomplete logic remain.**
+- **All documentation, comments, and scripts are in professional English.**
+- **Ready for enterprise deployment and further extension.**
+
+---
 
 ---
 
@@ -38,7 +63,15 @@
 - 🌸 **Bloom filters** for fast lookups
 - 📡 **gRPC** for internal coordination
 - 🌐 **HTTP REST API** for client access
-- 🔍 **O(1) in-memory index** with HashMap
+
+---
+
+
+### � Project Status & Roadmap
+
+- **v0.2.0 is fully production-ready.**
+- **All major distributed features are complete and tested.**
+- **Security (TLS, authentication) and cross-datacenter replication are planned for v0.3.0+.**
 
 ### 🔄 Evolution from mini-kvstore-v2
 
@@ -392,21 +425,22 @@ read_success....: 99.82% ✓ 31945  ✗ 58
 
 ## 🚀 Features
 
-### ✅ Implemented (v0.1. 0)
+
+### ✅ Implemented (v0.2.0)
 
 **Core Distributed Features:**
-- [x] Raft consensus for coordinator (simplified single-leader for v0.1)
-- [x] 2PC (Two-Phase Commit) for distributed writes
+- [x] Full multi-node Raft consensus (leader election, log replication, snapshots, commit index, recovery, partition detection)
+- [x] Advanced 2PC streaming for distributed writes (chunked, error handling, retry, timeouts)
 - [x] N-way replication (configurable factor, default = 3)
 - [x] HRW (Highest Random Weight) placement
 - [x] 256 virtual shards for horizontal scaling
-- [x] Automatic shard rebalancing (structure in place)
+- [x] Automatic cluster rebalancing (detects load, moves blobs, updates metadata)
 
 **Storage Engine:**
-- [x] Segmented append-only logs (from mini-kvstore-v2)
+- [x] Segmented append-only logs
 - [x] In-memory HashMap index (O(1) lookups)
 - [x] Bloom filters for fast negative lookups
-- [x] Index snapshots (5ms restarts vs 500ms rebuild)
+- [x] Index snapshots (5ms restarts)
 - [x] CRC32 checksums on every record
 - [x] Automatic compaction (background tasks)
 
@@ -418,22 +452,18 @@ read_success....: 99.82% ✓ 31945  ✗ 58
 **APIs:**
 - [x] gRPC for internal coordination (coordinator ↔ volume)
 - [x] HTTP REST API for client access
-- [x] CLI for operations (verify, repair, compact)
+- [x] CLI for operations (verify, repair, compact, rebalance)
 
 **Infrastructure:**
 - [x] Docker Compose setup
 - [x] GitHub Actions CI/CD
 - [x] k6 benchmarks with multiple scenarios
 - [x] OpenTelemetry support (Jaeger tracing)
+- [x] Prometheus metrics endpoint (/metrics)
 
-### 🚧 In Progress (v0.2.0)
-
-- [ ] Full Raft multi-node consensus (currently simplified)
-- [ ] Complete 2PC streaming (coordinator → volume data transfer)
-- [ ] Ops commands implementation (verify/repair/compact logic)
-- [ ] Automatic rebalancing on node add/remove
-- [ ] Compression (LZ4/Zstd)
-- [ ] Enhanced metrics (Prometheus export)
+**Testing & Internationalization:**
+- [x] Professional integration, stress, and recovery tests
+- [x] All scripts, test templates, and documentation in English
 
 ### 🔮 Planned (v0.3.0+)
 

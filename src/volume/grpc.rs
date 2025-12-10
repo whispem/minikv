@@ -1,3 +1,8 @@
+//! Volume gRPC service implementation
+//!
+//! This module exposes the internal gRPC API for volume operations.
+//! Security features (TLS, authentication) and cross-datacenter replication are planned for future releases.
+
 use crate::proto::volume_internal_server::{VolumeInternal, VolumeInternalServer};
 use crate::proto::*;
 use crate::volume::blob::BlobStore;

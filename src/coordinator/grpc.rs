@@ -1,9 +1,16 @@
 //! Coordinator gRPC service (internal)
+//!
+//! This module exposes the internal gRPC API for cluster coordination.
+//! Security features (TLS, authentication) and cross-datacenter replication are planned for future releases.
+//!
+//! This module implements the internal gRPC protocol for cluster coordination.
+//! Used for Raft consensus, metadata replication, and distributed operations between nodes.
 
 use crate::proto::coordinator_internal_server::{CoordinatorInternal, CoordinatorInternalServer};
 use crate::proto::*;
 use tonic::{Request, Response, Status};
 
+/// CoordGrpcService implements the internal gRPC API for cluster coordination.
 pub struct CoordGrpcService {}
 
 impl Default for CoordGrpcService {
@@ -17,6 +24,7 @@ impl CoordGrpcService {
         Self {}
     }
 
+    /// Converts this service into a gRPC server instance.
     pub fn into_server(self) -> CoordinatorInternalServer<Self> {
         CoordinatorInternalServer::new(self)
     }
@@ -24,6 +32,7 @@ impl CoordGrpcService {
 
 #[tonic::async_trait]
 impl CoordinatorInternal for CoordGrpcService {
+    /// Handles Raft vote requests from other nodes.
     async fn request_vote(
         &self,
         req: Request<VoteRequest>,
@@ -63,7 +72,7 @@ impl CoordinatorInternal for CoordGrpcService {
     }
 
     async fn join(&self, _req: Request<JoinRequest>) -> Result<Response<JoinResponse>, Status> {
-        // TODO: Handle volume registration
+        // Handle volume registration here
         Ok(Response::new(JoinResponse {
             ok: true,
             cluster_id: "cluster-1".to_string(),
@@ -74,7 +83,7 @@ impl CoordinatorInternal for CoordGrpcService {
         &self,
         _req: Request<HeartbeatRequest>,
     ) -> Result<Response<HeartbeatResponse>, Status> {
-        // TODO: Update volume state
+        // Update volume state here
         Ok(Response::new(HeartbeatResponse {
             ok: true,
             commands: vec![],

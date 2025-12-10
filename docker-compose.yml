@@ -2,6 +2,7 @@ version: '3.8'
 
 services:
   # Coordinator 1 (Raft leader)
+  # This service runs the Raft leader node for metadata replication and cluster coordination.
   coord-1:
     build:
       context: .
@@ -29,6 +30,7 @@ services:
       retries: 3
 
   # Coordinator 2 (Raft follower)
+  # This service runs a Raft follower node for high availability and failover.
   coord-2:
     build:
       context: .

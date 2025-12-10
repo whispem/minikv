@@ -1,11 +1,18 @@
 //! Placement strategy using HRW hashing and sharding
+//!
+//! This module implements horizontal scaling via sharding and flexible replica sets.
+//! Keys are assigned to shards using HRW (Highest Random Weight) hashing, and replicas are selected for fault tolerance.
 
 use crate::common::{select_replicas, shard_key, ConsistentHashRing, Result};
 use crate::coordinator::metadata::VolumeMetadata;
 
+/// PlacementManager handles sharding and replica selection for distributed writes.
 pub struct PlacementManager {
+    /// Consistent hash ring for shard assignment
     ring: ConsistentHashRing,
+    /// Number of replicas per key
     replicas: usize,
+    /// Total number of shards in the cluster
     num_shards: u64,
 }
 
@@ -18,7 +25,8 @@ impl PlacementManager {
         }
     }
 
-    /// Select volumes for a key
+    /// Select volumes for a key.
+    /// Uses HRW hashing to assign the key to a shard and select healthy replicas.
     pub fn select_volumes(&self, key: &str, volumes: &[VolumeMetadata]) -> Result<Vec<String>> {
         if volumes.is_empty() {
             return Err(crate::Error::NoHealthyVolumes);

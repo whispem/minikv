@@ -1,3 +1,9 @@
+//! BlobStore implementation
+//! This module provides the main storage engine for data volumes.
+//! It uses a log-structured, append-only design for durability and performance.
+//! The in-memory HashMap index enables fast lookups, while a Bloom filter accelerates negative lookups.
+//! All operations are logged to a Write-Ahead Log (WAL) for crash recovery.
+
 use crate::common::{blake3_hash, crc32, Result, WalSyncPolicy};
 use crate::volume::index::{BlobLocation, Index};
 use crate::volume::wal::{Wal, WalEntry, WalOp};
@@ -19,14 +25,23 @@ pub struct StoreStats {
     pub bloom_false_positives: u64,
 }
 
+/// BlobStore manages the log-structured storage for a volume.
+/// It maintains an in-memory index and a Bloom filter for fast lookups.
+/// All changes are recorded in a WAL for durability and recovery.
 pub struct BlobStore {
     data_path: PathBuf,
 
+    /// In-memory index for key lookups
     index: Index,
+    /// Bloom filter for fast negative lookups
     bloom: Bloom<[u8; 32]>,
+    /// Write-Ahead Log for durability
     wal: Wal,
+    /// Current segment number in log-structured storage
     current_segment: u64,
+    /// Current offset in the active segment
     current_offset: u64,
+    /// WAL sync policy
     sync_policy: WalSyncPolicy,
 }
 

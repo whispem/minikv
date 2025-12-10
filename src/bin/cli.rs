@@ -1,8 +1,15 @@
 //! CLI for cluster operations
+//!
+//! This module implements the command-line interface for cluster management.
+//! Provides commands for verification, repair, and compaction of the distributed key-value store.
 
 use clap::{Parser, Subcommand};
-use minikv::ops::{compact_cluster, repair_cluster, verify_cluster};
+use minikv::ops::{
+    auto_rebalance_cluster, compact_cluster, prepare_seamless_upgrade, repair_cluster,
+    stream_large_blob, verify_cluster,
+};
 
+/// CLI arguments for cluster management.
 #[derive(Parser)]
 #[command(name = "minikv")]
 #[command(about = "minikv distributed key-value store CLI")]
@@ -12,30 +19,34 @@ struct Cli {
     #[arg(long, default_value = "http://localhost:5000")]
     coordinator: String,
 
+    /// Cluster operation to perform
     #[command(subcommand)]
     command: Commands,
 }
 
+/// Supported cluster operations for the CLI.
 #[derive(Subcommand)]
 enum Commands {
     /// Verify cluster integrity
+    /// Checks for missing or corrupted keys, optionally verifies checksums.
     Verify {
         /// Deep verification (checksums)
         #[arg(long)]
         deep: bool,
 
-        /// Concurrency level
+        /// Concurrency level for verification
         #[arg(long, default_value = "16")]
         concurrency: usize,
     },
 
     /// Repair under-replicated keys
+    /// Attempts to restore the desired replication factor for all keys.
     Repair {
         /// Target replication factor
         #[arg(long, default_value = "3")]
         replicas: usize,
 
-        /// Dry run
+        /// Dry run (do not perform actual repair)
         #[arg(long)]
         dry_run: bool,
     },
@@ -72,6 +83,19 @@ enum Commands {
         /// Key
         key: String,
     },
+
+    /// Trigger auto-rebalancing of cluster data
+    Rebalance {},
+
+    /// Prepare cluster for seamless upgrade
+    Upgrade {},
+
+    /// Stream a large blob by key
+    Stream {
+        /// Key to stream
+        #[arg(long)]
+        key: String,
+    },
 }
 
 #[tokio::main]
@@ -106,16 +130,47 @@ async fn main() -> anyhow::Result<()> {
             println!("  Bytes freed: {}", report.bytes_freed);
         }
 
-        Commands::Put { key: _, file: _ } => {
-            println!("PUT not yet implemented");
+        Commands::Put { key, file } => {
+            // Read value from file
+            let value = std::fs::read(&file)?;
+            let url = format!("{}/{}", cli.coordinator, key);
+            let client = reqwest::Client::new();
+            let resp = client.post(&url).body(value).send().await?;
+            println!("PUT {}: {}", key, resp.status());
         }
 
-        Commands::Get { key: _, output: _ } => {
-            println!("GET not yet implemented");
+        Commands::Rebalance {} => {
+            auto_rebalance_cluster(&cli.coordinator).await?;
+            println!("Auto-rebalancing triggered.");
         }
 
-        Commands::Delete { key: _ } => {
-            println!("DELETE not yet implemented");
+        Commands::Upgrade {} => {
+            prepare_seamless_upgrade(&cli.coordinator).await?;
+            println!("Seamless upgrade prepared.");
+        }
+
+        Commands::Stream { key } => {
+            stream_large_blob("volume-1", &key).await?;
+            println!("Streaming large blob for key: {}", key);
+        }
+
+        Commands::Get { key, output } => {
+            let url = format!("{}/{}", cli.coordinator, key);
+            let resp = reqwest::get(&url).await?;
+            let value = resp.text().await?;
+            if output.as_os_str().is_empty() {
+                println!("GET {}: {}", key, value);
+            } else {
+                std::fs::write(&output, &value)?;
+                println!("GET {}: value written to file", key);
+            }
+        }
+
+        Commands::Delete { key } => {
+            let url = format!("{}/{}", cli.coordinator, key);
+            let client = reqwest::Client::new();
+            let resp = client.delete(&url).send().await?;
+            println!("DELETE {}: {}", key, resp.status());
         }
     }
 

@@ -1,6 +1,8 @@
 //! In-memory index for fast key lookups
 //!
-//! Maps: key → BlobLocation (shard, offset, size, blake3)
+//! This module provides a fast, in-memory HashMap index for key-value lookups.
+//! Each key maps to a BlobLocation, which describes where the value is stored on disk.
+//! The index supports snapshotting for fast recovery after a crash.
 
 use crate::common::Result;
 use serde::{Deserialize, Serialize};
@@ -12,6 +14,7 @@ use std::path::Path;
 const SNAPSHOT_MAGIC: &[u8; 8] = b"KVINDEX2";
 
 /// Blob location metadata
+/// Describes the physical location of a value in the log-structured storage engine.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlobLocation {
     pub shard: u64,
@@ -21,6 +24,8 @@ pub struct BlobLocation {
 }
 
 /// In-memory index
+/// HashMap-based index for fast key lookups.
+/// Supports saving/loading snapshots for recovery.
 #[derive(Debug, Default)]
 pub struct Index {
     map: HashMap<String, BlobLocation>,
@@ -33,7 +38,7 @@ impl Index {
         }
     }
 
-    /// Insert or update key
+    /// Insert or update a key in the index.
     pub fn insert(&mut self, key: String, location: BlobLocation) {
         self.map.insert(key, location);
     }
@@ -78,7 +83,8 @@ impl Index {
         self.map.clear();
     }
 
-    /// Save index snapshot to file
+    /// Save the current index as a snapshot file.
+    /// Used for fast recovery after restart.
     pub fn save_snapshot(&self, path: impl AsRef<Path>) -> Result<()> {
         let file = File::create(path)?;
         let mut writer = BufWriter::new(file);
@@ -111,7 +117,8 @@ impl Index {
         Ok(())
     }
 
-    /// Load index snapshot from file
+    /// Load an index snapshot from file.
+    /// Returns a new Index instance populated from the snapshot.
     pub fn load_snapshot(path: impl AsRef<Path>) -> Result<Self> {
         let file = File::open(path)?;
         let mut reader = BufReader::new(file);

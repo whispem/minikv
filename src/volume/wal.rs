@@ -1,7 +1,10 @@
 //! Write-Ahead Log (WAL) implementation
 //!
-//!  Ensures durability by writing operations to a log before applying them.
-//! Format: [MAGIC][SEQUENCE][OP][KEY_LEN][VALUE_LEN][KEY][VALUE][CRC32]
+//! Ensures durability by writing operations to a log before applying them.
+//! WAL format: [MAGIC][SEQUENCE][OP][KEY_LEN][VALUE_LEN][KEY][VALUE][CRC32]
+//!
+//! This module provides append-only logging for all write and delete operations.
+//! On recovery, the log is replayed to restore the latest state.
 
 use crate::common::{crc32, Error, Result, WalSyncPolicy};
 use std::fs::{File, OpenOptions};
@@ -13,6 +16,7 @@ const OP_PUT: u8 = 1;
 const OP_DELETE: u8 = 2;
 
 /// WAL entry
+/// Represents a single operation in the log, either a write (Put) or a delete.
 #[derive(Debug, Clone)]
 pub struct WalEntry {
     pub sequence: u64,
@@ -26,6 +30,7 @@ pub enum WalOp {
 }
 
 /// Write-Ahead Log
+/// Main WAL structure. Handles appending operations and syncing to disk.
 pub struct Wal {
     path: PathBuf,
     writer: BufWriter<File>,
@@ -34,7 +39,8 @@ pub struct Wal {
 }
 
 impl Wal {
-    /// Open or create WAL
+    /// Open or create WAL file.
+    /// If the file exists, finds the last sequence number to continue appending.
     pub fn open(path: impl AsRef<Path>, sync_policy: WalSyncPolicy) -> Result<Self> {
         let path = path.as_ref().to_path_buf();
 
@@ -60,7 +66,8 @@ impl Wal {
         })
     }
 
-    /// Find the last sequence number in the WAL
+    /// Find the last sequence number in the WAL.
+    /// Used during WAL open to determine where to resume.
     fn find_last_sequence(path: &Path) -> Result<u64> {
         let file = match File::open(path) {
             Ok(f) => f,
@@ -84,7 +91,8 @@ impl Wal {
         Ok(max_seq.map(|s| s + 1).unwrap_or(0))
     }
 
-    /// Append a PUT operation
+    /// Append a PUT operation to the WAL.
+    /// Returns the sequence number assigned to this operation.
     pub fn append_put(&mut self, key: &str, value: &[u8]) -> Result<u64> {
         let sequence = self.next_sequence;
         self.next_sequence += 1;
@@ -95,7 +103,8 @@ impl Wal {
         Ok(sequence)
     }
 
-    /// Append a DELETE operation
+    /// Append a DELETE operation to the WAL.
+    /// Returns the sequence number assigned to this operation.
     pub fn append_delete(&mut self, key: &str) -> Result<u64> {
         let sequence = self.next_sequence;
         self.next_sequence += 1;
@@ -106,7 +115,8 @@ impl Wal {
         Ok(sequence)
     }
 
-    /// Write an entry to the WAL
+    /// Write an entry to the WAL file.
+    /// Handles serialization and CRC protection.
     fn write_entry(
         &mut self,
         sequence: u64,

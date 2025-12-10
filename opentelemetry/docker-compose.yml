@@ -2,6 +2,7 @@ version: '3.8'
 
 services:
   # Jaeger for trace visualization
+  # Jaeger collects and visualizes distributed traces from all cluster components.
   jaeger:
     image: jaegertracing/all-in-one:latest
     container_name: minikv-jaeger
@@ -15,6 +16,7 @@ services:
       - minikv-observability
 
   # Prometheus for metrics
+  # Prometheus scrapes metrics from all services for monitoring and alerting.
   prometheus:
     image: prom/prometheus:latest
     container_name: minikv-prometheus
@@ -30,6 +32,7 @@ services:
       - minikv-observability
 
   # Grafana for dashboards
+  # Grafana provides dashboards for visualizing metrics and traces.
   grafana:
     image: grafana/grafana:latest
     container_name: minikv-grafana
