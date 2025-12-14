@@ -1,105 +1,104 @@
-# Contributing to minikv
+# Contributing to minikv 🦀
 
-Thank you for your interest in contributing to minikv! 🦀
+Thank you for your interest in **minikv**! Contributions — bug reports, code, docs, or design feedback — are more than welcome.
+
 
 ## Quick Start
 
 ```bash
 # Fork and clone
-git clone https://github.com/YOUR_USERNAME/minikv
+git clone https://github.com/whispem/minikv
 cd minikv
 
-# Build
+# Build & test
 cargo build --release
+cargo test          # All unit & integration tests
 
-# Run tests
-cargo test
-cargo test --test integration
-
-# Format and lint
+# Format & lint
 cargo fmt --all
 cargo clippy --all-targets -- -D warnings
 ```
 
-## Areas That Need Help
 
-### 1. Complete Raft Implementation
-Currently simplified for single-node testing. Need:
-- Multi-node leader election
-- Log replication
-- Snapshot mechanism
-- Membership changes
+## How to Contribute
 
-### 2. Full 2PC Streaming
-- Coordinator → Volume data streaming
-- Resume partial uploads
-- Concurrent uploads optimization
+- **Bug report**: Open an [issue](https://github.com/whispem/minikv/issues) with as much detail as possible (stacktrace, reproduction, expected/actual).
+- **Feature request/discussion**: Open an issue or Pull Request (PR) — all proposals are welcome.
+- **Code**: Fork, branch, commit, PR! See **Development Workflow** below.
+- **Docs**: Spotted a typo, missing info, or want to improve clarity? PRs always welcome.
 
-### 3. Performance
-- Zero-copy I/O with sendfile
-- io_uring integration (Linux)
-- Batch operations
-- Compression (LZ4/Zstd)
 
-### 4. Ops Commands
-- Complete `verify` logic
-- Complete `repair` logic
-- Rebalancing automation
+## Current Scope & Status
 
-### 5. Testing
-- More integration tests
-- Fault injection tests
-- Chaos engineering
+All **core distributed features** for v0.2.0 are complete and production-ready:
+
+- Multi-node Raft consensus (leader election, replication, snapshot, recovery)
+- Two-Phase Commit (2PC) protocol for distributed writes
+- Automatic cluster rebalancing (load detection, blob migration, metadata update)
+- WAL for durability; O(1) HashMap indexing, CRC32, quick crash recovery
+- HTTP API, gRPC for cluster internals, CLI for ops (verify, repair, compact, rebalance)
+- Prometheus `/metrics`, distributed tracing, k6 benchmark suites
+- Docs, scripts, templates — all in English
+
+**If something doesn’t work as documented, please open an issue**!
+
+
+## What’s Next? (You can Help!)
+
+The next major priorities for minikv (planned v0.3.0+) are:
+- Range queries & batch API (multi-put/get/delete)
+- Cross-datacenter replication / topology changes
+- S3-compatible API & Multi-tenancy
+- Security: TLS, authentication, advanced ACLs
+- Chaos testing, perf tuning (io_uring, zero-copy), more resilience
+- Admin dashboard (web), smoother upgrades/rolling ops
+
+*Want to work on any of these? Let’s sync in an issue or discussion!*
+
 
 ## Development Workflow
 
-### 1. Create a feature branch
+1. **Branch**
+    ```bash
+    git checkout -b feature/my-feature
+    ```
+2. **Make changes** (with clear comments, error handling, and tests if possible)
+3. **Test**
+    ```bash
+    cargo test
+    ```
+4. **Lint & format**
+    ```bash
+    cargo fmt --all
+    cargo clippy --all-targets -- -D warnings
+    ```
+5. **Commit (Conventional commits encouraged)**
+    ```bash
+    git commit -m "feat(raft): improve vote timeout randomization"
+    ```
+6. **Push & Open PR!**
 
-```bash
-git checkout -b feature/my-feature
-```
-
-### 2. Make changes
-
-Follow the existing code style:
-- 4-space indentation
-- Clear comments
-- Comprehensive error handling
-- Unit tests for new code
-
-### 3. Test
-
-```bash
-cargo test
-cargo test --test integration
-cargo clippy --all-targets
-```
-
-### 4. Commit
-
-Use conventional commits:
-
-```bash
-git commit -m "feat: add Raft log replication"
-git commit -m "fix: correct 2PC abort logic"
-git commit -m "docs: update architecture diagram"
-```
-
-### 5. Push and create PR
-
-```bash
-git push origin feature/my-feature
-```
-
-Then create a Pull Request on GitHub.
 
 ## Code Style
 
-- Use `cargo fmt` before committing
-- Pass `cargo clippy` with no warnings
-- Add tests for new features
-- Update documentation
+- **4-space indentation**
+- **Comprehensive doc comments** (///, //!) and code comments (`// Why?`)
+- **Pass all tests & lints**
+- **Include or update relevant docs**
 
-## Questions?
 
-Open an issue or reach out to [@whispem](https://github.com/whispem).
+## Project Values
+
+- **Simplicity first** (documentation, code, UX)
+- **Welcoming, inclusive** — newcomers, experts, all backgrounds welcome!
+- **Curiosity and learning**: Even PR drafts/tutorials/brainstorms matter.
+
+
+## Need Help? Have Questions?
+
+- Open an [issue](https://github.com/whispem/minikv/issues)
+- Discussion tab (if enabled)
+- Contact: [@whispem](https://github.com/whispem)
+
+
+**Thanks again for helping build an awesome distributed system, open to anyone curious! 🚀**
