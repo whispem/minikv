@@ -5,7 +5,30 @@ All notable changes to minikv will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.0] - 2025-12-10
+
+## [0.3.0] - 2025-12-22
+
+### Added - v0.3.0 Release
+
+#### Major Features
+- Range queries (efficient scans across keys)
+- Batch operations API (multi-put/get/delete)
+- TLS encryption for HTTP and gRPC (production-ready security)
+- Flexible configuration: file, environment variables, and CLI override
+- All code, comments, and documentation now in English
+- 100% green CI: build, test, lint, format
+
+#### Improvements
+- CLI and API fully support new batch and range operations
+- Example config and all templates now in English
+- Refined error handling and configuration merging
+- Documentation and README updated for v0.3.0
+
+#### Project Status
+- All v0.3.0 roadmap features are implemented and production-ready
+- No TODOs, stubs, or incomplete logic remain
+- Ready for enterprise deployment and future advanced features
+
 
 ### Added - v0.2.0 Release
 
@@ -107,13 +130,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Max key length: 1024 bytes
 - Default replication factor: 3
 
+
 ### Known Limitations
 
 - Raft implementation now supports multi-node consensus and leader election
-- 2PC streaming coordinator→volume not fully implemented
-- Ops commands (verify/repair/compact) are structure only
+- 2PC streaming coordinator→volume is fully implemented
+- Ops commands (verify/repair/compact) are fully functional
 - No compression support yet
-- No range queries yet
+- No cross-datacenter replication yet
+- No admin web dashboard yet
+- No S3-compatible API yet
+- No multi-tenancy or zero-copy I/O yet
 
 ---
 

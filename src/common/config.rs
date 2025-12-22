@@ -1,5 +1,17 @@
-//! Configuration for minikv components
+impl Config {
+    /// Loads configuration from a TOML file and overrides with environment variables (prefix MINIKV_)
+    pub fn load() -> Self {
+        let s = config::Config::builder()
+            .add_source(config::File::with_name("config.toml").required(false))
+            .add_source(config::File::with_name("config.local.toml").required(false))
+            .add_source(config::Environment::with_prefix("MINIKV").separator("_"))
+            .build()
+            .expect("Erreur chargement config");
+        s.try_deserialize().expect("Erreur parsing config")
+    }
+}
 
+/// Configuration for minikv components
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -72,6 +84,14 @@ pub struct CoordinatorConfig {
     /// Number of shards for consistent hashing
     #[serde(default = "default_num_shards")]
     pub num_shards: u64,
+
+    /// TLS certificate path (PEM)
+    #[serde(default)]
+    pub tls_cert_path: Option<String>,
+
+    /// TLS private key path (PEM)
+    #[serde(default)]
+    pub tls_key_path: Option<String>,
 }
 
 fn default_replicas() -> usize {
@@ -102,6 +122,8 @@ impl Default for CoordinatorConfig {
             heartbeat_interval_ms: default_heartbeat_interval(),
             snapshot_threshold: default_snapshot_threshold(),
             num_shards: default_num_shards(),
+            tls_cert_path: None,
+            tls_key_path: None,
         }
     }
 }

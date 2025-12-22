@@ -1,8 +1,20 @@
-//! Metadata store using RocksDB
-//!
-//! This module provides persistent storage for cluster metadata.
-//! It stores key metadata (replicas, size, hash, timestamps), volume registry (node_id to address, state, shards), and cluster configuration.
+use once_cell::sync::OnceCell;
+use std::sync::Arc;
+static GLOBAL_STORE: OnceCell<Arc<MetadataStore>> = OnceCell::new();
 
+/// Initializes the global store (call at startup)
+pub fn init_global_store(store: MetadataStore) {
+    let _ = GLOBAL_STORE.set(Arc::new(store));
+}
+
+/// Access the global store
+pub fn get_global_store() -> Arc<MetadataStore> {
+    GLOBAL_STORE.get().expect("Global MetadataStore not initialized").clone()
+}
+/// Metadata store using RocksDB
+///
+/// This module provides persistent storage for cluster metadata.
+/// It stores key metadata (replicas, size, hash, timestamps), volume registry (node_id to address, state, shards), and cluster configuration.
 use crate::common::{NodeState, Result};
 use rocksdb::{Options, DB};
 use serde::{Deserialize, Serialize};

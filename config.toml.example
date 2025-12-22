@@ -1,0 +1,15 @@
+# TLS (PEM file paths)
+tls_cert_path = "./certs/cert.pem"
+tls_key_path = "./certs/key.pem"
+# Example minikv configuration (config.toml)
+
+# HTTP listening port
+http_port = 8080
+# gRPC listening port
+grpc_port = 50051
+# Metadata database path
+metadata_path = "./data/metadata.db"
+# Log level (info, debug, warn, error)
+log_level = "info"
+# Cluster ID (optional)
+cluster_id = "minikv-dev"

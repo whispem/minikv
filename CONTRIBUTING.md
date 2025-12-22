@@ -28,30 +28,35 @@ cargo clippy --all-targets -- -D warnings
 - **Docs**: Spotted a typo, missing info, or want to improve clarity? PRs always welcome.
 
 
+
 ## Current Scope & Status
 
-All **core distributed features** for v0.2.0 are complete and production-ready:
+All **core distributed features** for v0.3.0 are complete and production-ready:
 
 - Multi-node Raft consensus (leader election, replication, snapshot, recovery)
 - Two-Phase Commit (2PC) protocol for distributed writes
 - Automatic cluster rebalancing (load detection, blob migration, metadata update)
 - WAL for durability; O(1) HashMap indexing, CRC32, quick crash recovery
-- HTTP API, gRPC for cluster internals, CLI for ops (verify, repair, compact, rebalance)
+- HTTP API, gRPC for cluster internals, CLI for ops (verify, repair, compact, rebalance, batch, range)
+- Range queries (efficient scans across keys)
+- Batch operations API (multi-put/get/delete)
+- TLS encryption for HTTP and gRPC (production-ready security)
+- Flexible configuration (file, env, CLI override)
 - Prometheus `/metrics`, distributed tracing, k6 benchmark suites
 - Docs, scripts, templates — all in English
 
 **If something doesn’t work as documented, please open an issue**!
 
 
+
 ## What’s Next? (You can Help!)
 
-The next major priorities for minikv (planned v0.3.0+) are:
-- Range queries & batch API (multi-put/get/delete)
+The next major priorities for minikv (planned v0.4.0+) are:
 - Cross-datacenter replication / topology changes
 - S3-compatible API & Multi-tenancy
-- Security: TLS, authentication, advanced ACLs
-- Chaos testing, perf tuning (io_uring, zero-copy), more resilience
+- Advanced authentication and authorization (ACLs)
 - Admin dashboard (web), smoother upgrades/rolling ops
+- Chaos testing, perf tuning (io_uring, zero-copy), more resilience
 
 *Want to work on any of these? Let’s sync in an issue or discussion!*
 

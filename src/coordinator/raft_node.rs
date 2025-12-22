@@ -42,7 +42,7 @@ pub struct RaftNode {
 }
 
 impl RaftNode {
-    /// Détecte une partition réseau (absence de heartbeat)
+    /// Detects a network partition (no heartbeat received)
     pub fn detect_partition(
         &self,
         last_heartbeat: tokio::time::Instant,
@@ -51,7 +51,7 @@ impl RaftNode {
         last_heartbeat.elapsed() > timeout
     }
 
-    /// Recovery : recharge le snapshot et le log après crash ou partition
+    /// Recovery: reloads the snapshot and log after a crash or partition
     pub fn recover(&self) {
         if self.load_snapshot().is_some() {
             // Apply the snapshot to the real state machine here
@@ -183,7 +183,7 @@ impl RaftNode {
                 for entry in req.entries {
                     log.push(entry);
                 }
-                // Met à jour le commit index
+                // Update the commit index
                 let mut commit = self.commit_index.lock().unwrap();
                 if req.leader_commit > *commit {
                     *commit =
@@ -367,7 +367,7 @@ impl RaftNode {
             Ok(())
         } else {
             Err(crate::Error::Internal(
-                "Raft: pas de majorité pour le commit".to_string(),
+                "Raft: no majority for commit".to_string(),
             ))
         }
     }
@@ -383,7 +383,7 @@ pub fn start_raft_tasks(node: Arc<RaftNode>) -> tokio::task::JoinHandle<()> {
                 tokio::time::Duration::from_millis(150 + rand::random::<u64>() % 150);
             loop {
                 tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
-                // Clone peers à chaque tour pour éviter MutexGuard
+                // Clone peers each loop to avoid holding MutexGuard
                 let peers = node.peers.lock().unwrap().clone();
                 // If follower and no heartbeat received, start election
                 if !node.is_leader() && last_heartbeat.elapsed() > election_timeout {

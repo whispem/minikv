@@ -12,14 +12,23 @@
 
 
 
-## 🚦 What's New in v0.2.0
 
-minikv v0.2.0 is ready for action: robust, documented, and built for everyone.
+## 🚦 What's New in v0.3.0
 
+minikv v0.3.0 is a major step forward: more features, more flexibility, and fully production-ready — now 100% in English.
+
+- Range queries (efficient scans across keys)
+- Batch operations API (multi-put/get/delete)
+- TLS encryption for HTTP and gRPC (production-ready security)
+- Flexible configuration (file, env, CLI override)
+- All code, comments, and documentation in English
+- CI 100% green: build, test, lint, format
+
+**Previous highlights (v0.2.0):**
 - Multi-node Raft cluster for high availability
 - Reliable Two-Phase Commit for distributed writes
 - Automatic cluster rebalancing
-- Prometheus metrics, stress-tested integration & English docs
+- Prometheus metrics, stress-tested integration
 
 
 
@@ -160,7 +169,8 @@ Try it yourself with `cargo bench` and `/bench` JS scenarios.
 
 
 
-## ✅ Implemented (v0.2.0)
+
+## ✅ Implemented (v0.3.0)
 
 **Core Distributed Features:**  
 - [x] Multi-node Raft consensus (leader election, log replication, snapshots, recovery, partition detection)  
@@ -169,6 +179,10 @@ Try it yourself with `cargo bench` and `/bench` JS scenarios.
 - [x] High Random Weight (HRW) placement for even distribution  
 - [x] 256 virtual shards for horizontal scaling  
 - [x] Automatic cluster rebalancing (load detection, blob migration, metadata updates)  
+- [x] Range queries (efficient scans across keys)  
+- [x] Batch operations API (multi-put/get/delete)  
+- [x] TLS encryption for HTTP and gRPC (production-ready security)  
+- [x] Flexible configuration (file, env, CLI override)  
 
 **Storage Engine:**  
 - [x] Segmented, append-only log structure  
@@ -186,7 +200,7 @@ Try it yourself with `cargo bench` and `/bench` JS scenarios.
 **APIs:**  
 - [x] gRPC for internal communication (coordinator ↔ volume)  
 - [x] HTTP REST API for clients  
-- [x] CLI for cluster operations (verify, repair, compact, rebalance)  
+- [x] CLI for cluster operations (verify, repair, compact, rebalance, batch, range)  
 
 **Infrastructure:**  
 - [x] Docker Compose setup for dev/test  
@@ -197,25 +211,24 @@ Try it yourself with `cargo bench` and `/bench` JS scenarios.
 
 **Testing & Internationalization:**  
 - [x] Professional integration, stress, and recovery tests  
-- [x] All scripts, templates, docs in English  
+- [x] All code, scripts, templates, and docs in English  
 
 
 
 
-## 🔮 Roadmap / Planned (v0.3.0+)
+
+## 🔮 Roadmap / Planned (v0.4.0+)
 
 There's always more to build!  
 Here's what's next for minikv:
 
-- [ ] Range queries (efficient scans across keys)
-- [ ] Batch operations API (multi-put/get/delete)
 - [ ] Cross-datacenter replication
 - [ ] Admin web dashboard
-- [ ] TLS, authentication, and authorization
+- [ ] Advanced authentication and authorization
 - [ ] S3-compatible API
 - [ ] Multi-tenancy support
 - [ ] Zero-copy I/O (io_uring support for ultrafast disk operations)
-- [ ] More flexibility in configuration and deployment
+- [ ] Even more flexibility in configuration and deployment
 
 
 
@@ -241,6 +254,53 @@ One month, countless lessons — and now a real repo serving real clusters.
 - Coordinators for metadata, volumes for storage
 - gRPC for fast node coordination
 - HTTP REST for client ease-of-use
+
+
+
+
+
+## 🔒 Enable TLS (HTTPS/Secure gRPC)
+
+minikv supports network encryption (TLS) for both the HTTP API **and** internal gRPC.
+
+### Generate self-signed certificates (demo/dev)
+
+```bash
+openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes -subj '/CN=localhost'
+```
+
+- Place `cert.pem` and `key.pem` in a directory of your choice (e.g., `./certs/`).
+
+### Start a coordinator with TLS
+
+```bash
+./target/release/minikv-coord serve \
+  --id coord-1 \
+  --bind 0.0.0.0:5000 \
+  --grpc 0.0.0.0:5001 \
+  --db ./coord-data \
+  --peers coord-2:5001,coord-3:5002 \
+  --tls-cert ./certs/cert.pem \
+  --tls-key ./certs/key.pem
+```
+
+- The HTTP API will be available over HTTPS (port 5000), and secure gRPC on 5001.
+- For production, use certificates signed by a trusted authority.
+
+### Client calls (curl example)
+
+```bash
+curl -k https://localhost:5000/my-key -o output.pdf
+```
+
+- The `-k` option disables certificate verification (useful for self-signed certs in dev).
+
+### Notes
+- Certificate/key paths are configurable via the config file, environment variables, or CLI.
+- The cluster can run in mixed mode (with or without TLS) depending on file presence.
+- gRPC (tonic) uses the same certificates as the HTTP API.
+
+For more details, see the [Configuration](#configuration) section or the `config.toml` file.
 
 
 

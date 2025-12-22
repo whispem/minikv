@@ -70,7 +70,153 @@ pub fn create_router(state: CoordState) -> Router {
         .route("/admin/scale", axum::routing::post(admin_scale))
         // Endpoint Prometheus
         .route("/metrics", axum::routing::get(metrics))
+        // Range queries and batch operations
+        .route("/range", axum::routing::get(range_query))
+        .route("/batch", axum::routing::post(batch_ops))
         .with_state(state)
+}
+/// HTTP handler for range queries: GET /range?start=...&end=...&include_values=...
+use axum::extract::Query;
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+struct RangeQuery {
+    start: String,
+    end: String,
+    include_values: Option<bool>,
+}
+
+async fn range_query(
+    State(state): State<CoordState>,
+    Query(params): Query<RangeQuery>,
+) -> impl IntoResponse {
+    let keys = match state.metadata.list_keys() {
+        Ok(keys) => keys,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("list_keys error: {}", e)),
+    };
+    let mut filtered: Vec<String> = keys
+        .into_iter()
+        .filter(|k| k >= &params.start && k <= &params.end)
+        .collect();
+    filtered.sort();
+    if params.include_values.unwrap_or(false) {
+        let mut values = Vec::new();
+        for k in &filtered {
+            match state.metadata.get_key(k) {
+                Ok(Some(meta)) => values.push(serde_json::to_value(&meta).unwrap_or(json!(null))),
+                _ => values.push(json!(null)),
+            }
+        }
+        (
+            StatusCode::OK,
+            serde_json::to_string(&json!({ "keys": filtered, "values": values })).unwrap(),
+        )
+    } else {
+        (
+            StatusCode::OK,
+            serde_json::to_string(&json!({ "keys": filtered })).unwrap(),
+        )
+    }
+}
+
+/// HTTP handler for batch operations: POST /batch
+use serde::Serialize;
+
+#[derive(Deserialize)]
+struct BatchOpReq {
+    op: String, // "put", "get", "delete"
+    key: String,
+    value: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct BatchReq {
+    ops: Vec<BatchOpReq>,
+}
+
+#[derive(Serialize)]
+struct BatchResultResp {
+    ok: bool,
+    key: String,
+    value: Option<String>,
+    error: Option<String>,
+}
+
+async fn batch_ops(
+    State(state): State<CoordState>,
+    axum::Json(req): axum::Json<BatchReq>,
+) -> impl IntoResponse {
+    let mut results = Vec::new();
+    for op in req.ops {
+        match op.op.as_str() {
+            "put" => {
+                if let Some(val) = op.value {
+                    let meta = crate::coordinator::metadata::KeyMetadata {
+                        key: op.key.clone(),
+                        replicas: vec![],
+                        size: val.len() as u64,
+                        blake3: "".to_string(),
+                        created_at: 0,
+                        updated_at: 0,
+                        state: crate::coordinator::metadata::KeyState::Active,
+                    };
+                    let r = state.metadata.put_key(&meta);
+                    results.push(BatchResultResp {
+                        ok: r.is_ok(),
+                        key: op.key,
+                        value: None,
+                        error: r.err().map(|e| format!("{}", e)),
+                    });
+                } else {
+                    results.push(BatchResultResp {
+                        ok: false,
+                        key: op.key,
+                        value: None,
+                        error: Some("Missing value for put".to_string()),
+                    });
+                }
+            }
+            "get" => {
+                let r = state.metadata.get_key(&op.key);
+                match r {
+                    Ok(Some(meta)) => results.push(BatchResultResp {
+                        ok: true,
+                        key: op.key,
+                        value: Some(serde_json::to_string(&meta).unwrap()),
+                        error: None,
+                    }),
+                    Ok(None) => results.push(BatchResultResp {
+                        ok: false,
+                        key: op.key,
+                        value: None,
+                        error: Some("Not found".to_string()),
+                    }),
+                    Err(e) => results.push(BatchResultResp {
+                        ok: false,
+                        key: op.key,
+                        value: None,
+                        error: Some(format!("{}", e)),
+                    }),
+                }
+            }
+            "delete" => {
+                let r = state.metadata.delete_key(&op.key);
+                results.push(BatchResultResp {
+                    ok: r.is_ok(),
+                    key: op.key,
+                    value: None,
+                    error: r.err().map(|e| format!("{}", e)),
+                });
+            }
+            _ => results.push(BatchResultResp {
+                ok: false,
+                key: op.key,
+                value: None,
+                error: Some("Unknown op".to_string()),
+            }),
+        }
+    }
+    axum::Json(json!({ "results": results }))
 }
 // ...existing code...
 

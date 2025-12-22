@@ -63,16 +63,45 @@ async fn main() -> anyhow::Result<()> {
             peers,
             replicas,
         } => {
-            let config = CoordinatorConfig {
-                bind_addr: bind.parse()?,
-                grpc_addr: grpc.parse()?,
-                db_path: db,
-                peers,
-                replicas,
+            // Load config from file, then override with CLI arguments
+            let config = minikv::common::config::Config::load();
+            // Override fields if provided via CLI
+            let bind_addr = bind.parse()?;
+            let grpc_addr = grpc.parse()?;
+            let db_path = db;
+            let mut coord_config = CoordinatorConfig {
+                bind_addr,
+                grpc_addr,
+                db_path,
+                    peers,
+                    replicas,
                 ..Default::default()
             };
-
-            let coord = Coordinator::new(config, id);
+            // If file config exists, merge it (CLI has priority)
+            if let Some(file_conf) = config.coordinator {
+                let bind_addr = file_conf.bind_addr;
+                let grpc_addr = file_conf.grpc_addr;
+                let db_path = file_conf.db_path.clone();
+                let peers = file_conf.peers.clone();
+                let replicas = file_conf.replicas;
+                if bind_addr != "0.0.0.0:5000".parse().unwrap() {
+                    coord_config.bind_addr = bind_addr;
+                }
+                if grpc_addr != "0.0.0.0:5001".parse().unwrap() {
+                    coord_config.grpc_addr = grpc_addr;
+                }
+                if db_path.as_path() != std::path::Path::new("./coord-data") {
+                    coord_config.db_path = db_path;
+                }
+                if !peers.is_empty() {
+                    coord_config.peers = peers;
+                }
+                if replicas != 3 {
+                    coord_config.replicas = replicas;
+                }
+                // ... other fields if needed
+            }
+            let coord = Coordinator::new(coord_config, id);
             coord.serve().await?;
         }
     }
