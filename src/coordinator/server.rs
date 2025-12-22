@@ -1,6 +1,6 @@
-use std::future::IntoFuture;
 /// Coordinator server
 use axum_server::tls_rustls::{bind_rustls, RustlsConfig};
+use std::future::IntoFuture;
 
 use crate::common::{CoordinatorConfig, Result};
 use crate::coordinator::grpc::CoordGrpcService;
@@ -52,12 +52,18 @@ impl Coordinator {
         let use_tls = self.config.tls_cert_path.is_some() && self.config.tls_key_path.is_some();
         use std::future::Future;
         use std::pin::Pin;
-        let http_server: Pin<Box<dyn Future<Output = std::result::Result<(), std::io::Error>> + Send>> = if use_tls {
+        let http_server: Pin<
+            Box<dyn Future<Output = std::result::Result<(), std::io::Error>> + Send>,
+        > = if use_tls {
             let cert_path = self.config.tls_cert_path.as_ref().unwrap();
             let key_path = self.config.tls_key_path.as_ref().unwrap();
-            let rustls_config = RustlsConfig::from_pem_file(cert_path, key_path).await.unwrap();
-            Box::pin(bind_rustls(self.config.bind_addr, rustls_config)
-                .serve(http_router.clone().into_make_service()))
+            let rustls_config = RustlsConfig::from_pem_file(cert_path, key_path)
+                .await
+                .unwrap();
+            Box::pin(
+                bind_rustls(self.config.bind_addr, rustls_config)
+                    .serve(http_router.clone().into_make_service()),
+            )
         } else {
             let http_listener = tokio::net::TcpListener::bind(self.config.bind_addr).await?;
             Box::pin(axum::serve(http_listener, http_router.clone()).into_future())
@@ -65,15 +71,19 @@ impl Coordinator {
 
         // Create gRPC server (TLS enabled if certs are present)
         let grpc_service = CoordGrpcService::new();
-        let grpc_server = if let (Some(cert_path), Some(key_path)) = (self.config.tls_cert_path.as_ref(), self.config.tls_key_path.as_ref()) {
+        let grpc_server = if let (Some(cert_path), Some(key_path)) = (
+            self.config.tls_cert_path.as_ref(),
+            self.config.tls_key_path.as_ref(),
+        ) {
             use tokio::fs;
-            use tonic::transport::{ServerTlsConfig, Identity};
+            use tonic::transport::{Identity, ServerTlsConfig};
             // Load PEM files
             let cert = fs::read(cert_path).await.expect("Cannot read TLS cert");
             let key = fs::read(key_path).await.expect("Cannot read TLS key");
             let identity = Identity::from_pem(cert, key);
             tonic::transport::Server::builder()
-                .tls_config(ServerTlsConfig::new().identity(identity)).expect("Invalid TLS config")
+                .tls_config(ServerTlsConfig::new().identity(identity))
+                .expect("Invalid TLS config")
                 .add_service(grpc_service.into_server())
                 .serve(self.config.grpc_addr)
         } else {

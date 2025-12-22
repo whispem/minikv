@@ -92,7 +92,12 @@ async fn range_query(
 ) -> impl IntoResponse {
     let keys = match state.metadata.list_keys() {
         Ok(keys) => keys,
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("list_keys error: {}", e)),
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("list_keys error: {}", e),
+            )
+        }
     };
     let mut filtered: Vec<String> = keys
         .into_iter()

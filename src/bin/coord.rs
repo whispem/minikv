@@ -73,8 +73,8 @@ async fn main() -> anyhow::Result<()> {
                 bind_addr,
                 grpc_addr,
                 db_path,
-                    peers,
-                    replicas,
+                peers,
+                replicas,
                 ..Default::default()
             };
             // If file config exists, merge it (CLI has priority)

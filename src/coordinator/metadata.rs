@@ -9,7 +9,10 @@ pub fn init_global_store(store: MetadataStore) {
 
 /// Access the global store
 pub fn get_global_store() -> Arc<MetadataStore> {
-    GLOBAL_STORE.get().expect("Global MetadataStore not initialized").clone()
+    GLOBAL_STORE
+        .get()
+        .expect("Global MetadataStore not initialized")
+        .clone()
 }
 /// Metadata store using RocksDB
 ///
