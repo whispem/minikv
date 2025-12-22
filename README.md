@@ -15,7 +15,7 @@
 
 ## 🚦 What's New in v0.3.0
 
-minikv v0.3.0 is a major step forward: more features, more flexibility, and fully production-ready — now 100% in English.
+minikv v0.3.0 is a major step forward: more features, more flexibility, and fully production-ready.
 
 - Range queries (efficient scans across keys)
 - Batch operations API (multi-put/get/delete)
@@ -364,4 +364,4 @@ consider starring [whispem/minikv](https://github.com/whispem/minikv)! ⭐
 - Repo & Issues: [whispem/minikv](https://github.com/whispem/minikv/issues)
 
 
-[Back to Top](#minikv)
+[Back to Top](#minikv-)
