@@ -25,3 +25,11 @@ coord*-data/
 logs/
 wal/
 test.txt
+
+# Temp data/logs/configs from integration tests
+coord-s3extra-data-*/
+vol-s3extra-data-*/
+vol-s3extra-wal-*/
+coord-s3extra-*.log
+vol-s3extra-*.log
+config-*.toml

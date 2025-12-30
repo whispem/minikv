@@ -1,0 +1,3 @@
+node_id = 'coord-s3'
+role = 'coordinator'
+replicas = 1

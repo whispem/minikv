@@ -54,7 +54,10 @@ jobs:
       - name: Run tests (skip benchmarks)
         run: cargo test --all --release -- --skip bench
 
-  # Docker build temporairement désactivé
+      - name: Run advanced S3 tests separately
+        run: cargo test --test s3_api_extra --release
+
+  # Docker build temporarily disabled
   # docker:
   #   name: Docker Build
   #   runs-on: ubuntu-latest
