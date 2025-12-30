@@ -1,12 +1,16 @@
 //! Basic test for the S3-compatible API (PUT then GET)
 use reqwest::Client;
+use std::net::TcpListener;
 use std::process::{Child, Command, Stdio};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
-use std::net::TcpListener;
 
 fn get_free_port() -> u16 {
-    TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port()
+    TcpListener::bind("127.0.0.1:0")
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port()
 }
 
 fn start_coord(http_port: u16, grpc_port: u16) -> Child {
@@ -15,14 +19,19 @@ fn start_coord(http_port: u16, grpc_port: u16) -> Child {
     std::fs::write(
         "config.toml",
         "node_id = 'coord-s3'\nrole = 'coordinator'\nreplicas = 1\n",
-    ).expect("Failed to write config.toml");
+    )
+    .expect("Failed to write config.toml");
     let mut cmd = Command::new("target/release/minikv-coord");
     cmd.args([
         "serve",
-        "--id", "coord-s3",
-        "--bind", &format!("127.0.0.1:{}", http_port),
-        "--grpc", &format!("127.0.0.1:{}", grpc_port),
-        "--db", "./coord-s3-data"
+        "--id",
+        "coord-s3",
+        "--bind",
+        &format!("127.0.0.1:{}", http_port),
+        "--grpc",
+        &format!("127.0.0.1:{}", grpc_port),
+        "--db",
+        "./coord-s3-data",
     ]);
     let log = std::fs::File::create("coord-s3.log").expect("Failed to create log file");
     let log_err = log.try_clone().expect("Failed to clone log file");
@@ -39,12 +48,18 @@ fn start_volume(http_port: u16, grpc_port: u16, coord_http_port: u16) -> Child {
     let mut cmd = Command::new("target/release/minikv-volume");
     cmd.args([
         "serve",
-        "--id", "vol-s3",
-        "--bind", &format!("127.0.0.1:{}", http_port),
-        "--grpc", &format!("127.0.0.1:{}", grpc_port),
-        "--data", "./vol-s3-data",
-        "--wal", "./vol-s3-wal",
-        "--coordinators", &format!("http://127.0.0.1:{}", coord_http_port)
+        "--id",
+        "vol-s3",
+        "--bind",
+        &format!("127.0.0.1:{}", http_port),
+        "--grpc",
+        &format!("127.0.0.1:{}", grpc_port),
+        "--data",
+        "./vol-s3-data",
+        "--wal",
+        "./vol-s3-wal",
+        "--coordinators",
+        &format!("http://127.0.0.1:{}", coord_http_port),
     ]);
     let log = std::fs::File::create("vol-s3.log").expect("Failed to create log file");
     let log_err = log.try_clone().expect("Failed to clone log file");
@@ -92,7 +107,12 @@ async fn test_s3_put_get() {
     let client = Client::new();
     let data = b"Hello, S3!";
     // PUT
-    let put_resp = client.put(&s3_url).body(data.as_ref()).send().await.unwrap();
+    let put_resp = client
+        .put(&s3_url)
+        .body(data.as_ref())
+        .send()
+        .await
+        .unwrap();
     assert!(put_resp.status().is_success(), "PUT failed: {:?}", put_resp);
     // GET
     let get_resp = client.get(&s3_url).send().await.unwrap();

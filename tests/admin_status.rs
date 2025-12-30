@@ -2,14 +2,18 @@
 
 use reqwest::Client;
 use serde_json::Value;
+use std::net::TcpListener;
 use std::process::{Child, Command, Stdio};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
-use std::net::TcpListener;
 
 /// Find a free TCP port on localhost
 fn get_free_port() -> u16 {
-    TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port()
+    TcpListener::bind("127.0.0.1:0")
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port()
 }
 
 /// Launch the minikv-coord server in the background, returns (Child, http_port, grpc_port)
@@ -24,14 +28,19 @@ fn start_server() -> (Child, u16, u16) {
     std::fs::write(
         "config.toml",
         "node_id = 'coord-test'\nrole = 'coordinator'\n",
-    ).expect("Failed to write config.toml");
+    )
+    .expect("Failed to write config.toml");
     let mut cmd = Command::new("target/release/minikv-coord");
     cmd.args([
         "serve",
-        "--id", "coord-test",
-        "--bind", &format!("127.0.0.1:{}", http_port),
-        "--grpc", &format!("127.0.0.1:{}", grpc_port),
-        "--db", "./coord-test-data"
+        "--id",
+        "coord-test",
+        "--bind",
+        &format!("127.0.0.1:{}", http_port),
+        "--grpc",
+        &format!("127.0.0.1:{}", grpc_port),
+        "--db",
+        "./coord-test-data",
     ]);
     let log = std::fs::File::create("coord-test.log").expect("Failed to create log file");
     let log_err = log.try_clone().expect("Failed to clone log file");
@@ -79,7 +88,11 @@ async fn test_admin_status() {
 
     let client = Client::new();
     let url = format!("http://localhost:{}/admin/status", http_port);
-    let resp = client.get(&url).send().await.expect("Status request failed");
+    let resp = client
+        .get(&url)
+        .send()
+        .await
+        .expect("Status request failed");
     assert!(resp.status().is_success(), "status endpoint failed");
     let text = resp.text().await.expect("Failed to read response body");
     let json: Value = serde_json::from_str(&text).expect("Response is not valid JSON");

@@ -1,14 +1,18 @@
 //! Additional tests for the S3-compatible API
 use reqwest::Client;
+use std::fs;
+use std::net::TcpListener;
 use std::process::{Child, Command, Stdio};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
-use std::net::TcpListener;
-use std::fs;
 use uuid::Uuid;
 
 fn get_free_port() -> u16 {
-    TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port()
+    TcpListener::bind("127.0.0.1:0")
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port()
 }
 
 fn start_coord(http_port: u16, grpc_port: u16, test_id: &str) -> (Child, String) {
@@ -18,15 +22,23 @@ fn start_coord(http_port: u16, grpc_port: u16, test_id: &str) -> (Child, String)
     let config_path = format!("/tmp/minikv-config-{}.toml", test_id);
     fs::write(
         &config_path,
-        format!("node_id = 'coord-s3extra-{}'\nrole = 'coordinator'\nreplicas = 1\n", test_id),
-    ).expect("Failed to write config.toml");
+        format!(
+            "node_id = 'coord-s3extra-{}'\nrole = 'coordinator'\nreplicas = 1\n",
+            test_id
+        ),
+    )
+    .expect("Failed to write config.toml");
     let mut cmd = Command::new("target/release/minikv-coord");
     cmd.args([
         "serve",
-        "--id", &format!("coord-s3extra-{}", test_id),
-        "--bind", &format!("127.0.0.1:{}", http_port),
-        "--grpc", &format!("127.0.0.1:{}", grpc_port),
-        "--db", &coord_data
+        "--id",
+        &format!("coord-s3extra-{}", test_id),
+        "--bind",
+        &format!("127.0.0.1:{}", http_port),
+        "--grpc",
+        &format!("127.0.0.1:{}", grpc_port),
+        "--db",
+        &coord_data,
     ]);
     cmd.env_clear();
     for (key, value) in std::env::vars() {
@@ -42,10 +54,18 @@ fn start_coord(http_port: u16, grpc_port: u16, test_id: &str) -> (Child, String)
     let log_err = log.try_clone().expect("Failed to clone log file");
     cmd.stdout(Stdio::from(log));
     cmd.stderr(Stdio::from(log_err));
-    (cmd.spawn().expect("Failed to launch minikv-coord server"), coord_data)
+    (
+        cmd.spawn().expect("Failed to launch minikv-coord server"),
+        coord_data,
+    )
 }
 
-fn start_volume(http_port: u16, grpc_port: u16, coord_http_port: u16, test_id: &str) -> (Child, String, String) {
+fn start_volume(
+    http_port: u16,
+    grpc_port: u16,
+    coord_http_port: u16,
+    test_id: &str,
+) -> (Child, String, String) {
     let vol_data = format!("vol-s3extra-data-{}", test_id);
     let vol_wal = format!("vol-s3extra-wal-{}", test_id);
     let _ = fs::remove_dir_all(&vol_data);
@@ -55,12 +75,18 @@ fn start_volume(http_port: u16, grpc_port: u16, coord_http_port: u16, test_id: &
     let mut cmd = Command::new("target/release/minikv-volume");
     cmd.args([
         "serve",
-        "--id", &format!("vol-s3extra-{}", test_id),
-        "--bind", &format!("127.0.0.1:{}", http_port),
-        "--grpc", &format!("127.0.0.1:{}", grpc_port),
-        "--data", &vol_data,
-        "--wal", &vol_wal,
-        "--coordinators", &format!("http://127.0.0.1:{}", coord_http_port)
+        "--id",
+        &format!("vol-s3extra-{}", test_id),
+        "--bind",
+        &format!("127.0.0.1:{}", http_port),
+        "--grpc",
+        &format!("127.0.0.1:{}", grpc_port),
+        "--data",
+        &vol_data,
+        "--wal",
+        &vol_wal,
+        "--coordinators",
+        &format!("http://127.0.0.1:{}", coord_http_port),
     ]);
     let log_path = format!("vol-s3extra-{}.log", test_id);
     let log = fs::File::create(&log_path).expect("Failed to create log file");
@@ -75,7 +101,11 @@ fn start_volume(http_port: u16, grpc_port: u16, coord_http_port: u16, test_id: &
     }
     cmd.env("RUST_LOG", "debug");
     cmd.env("RUST_BACKTRACE", "1");
-    (cmd.spawn().expect("Failed to launch minikv-volume server"), vol_data, vol_wal)
+    (
+        cmd.spawn().expect("Failed to launch minikv-volume server"),
+        vol_data,
+        vol_wal,
+    )
 }
 
 async fn wait_for_endpoint(childs: &mut [&mut Child], url: &str) {
@@ -135,7 +165,10 @@ async fn test_s3_overwrite() {
     let vol_grpc = get_free_port();
     let (mut coord, coord_data) = start_coord(coord_http, coord_grpc, &test_id);
     let (mut volume, vol_data, vol_wal) = start_volume(vol_http, vol_grpc, coord_http, &test_id);
-    let url = format!("http://127.0.0.1:{}/s3/testbucket/overwrite.txt", coord_http);
+    let url = format!(
+        "http://127.0.0.1:{}/s3/testbucket/overwrite.txt",
+        coord_http
+    );
     wait_for_endpoint(&mut [&mut coord, &mut volume], &url).await;
     let client = Client::new();
     let data1 = b"first";
