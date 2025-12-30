@@ -1,4 +1,4 @@
-# Professional Test Scenarios – minikv v0.2.0 (Current Release)
+# Professional Test Scenarios – minikv v0.4.0 (Current Release)
 
 This document describes manual test scenarios to validate the robustness, resilience, and consistency of the minikv cluster. Each scenario includes context, detailed steps, commands to execute, verification points, and success criteria.
 
@@ -98,14 +98,14 @@ This document describes manual test scenarios to validate the robustness, resili
 **Context:** Force a compaction or repair, then verify recovery.
 
 **Steps:**
-1. Démarrer le cluster, insérer des données.
-2. Appeler `/admin/compact` et `/admin/repair`.
-3. Vérifier la disponibilité et la cohérence des données après chaque opération.
+1. Start the cluster, insert data.
+2. Call `/admin/compact` and `/admin/repair`.
+3. Check availability and data consistency after each operation.
 
-**Critères de succès :**
-- Le cluster reste disponible pendant et après l’opération.
-- Les données sont compactées/réparées sans perte.
+**Success Criteria:**
+- The cluster remains available during and after the operation.
+- Data is compacted/repaired with no loss.
 
 ---
 
-> These scenarios should be executed manually, with result logging and metrics capture for each step. They guarantee professional-grade validation for minikv v0.2.0.
+> These scenarios should be executed manually, with result logging and metrics capture for each step. They guarantee professional-grade validation for minikv v0.4.0.
