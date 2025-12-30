@@ -2,11 +2,11 @@
 
 use reqwest::Client;
 use serde_json::Value;
+use std::env;
 use std::net::TcpListener;
 use std::process::{Child, Command, Stdio};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
-use std::env;
 
 /// Find a free TCP port on localhost
 fn get_free_port() -> u16 {
@@ -31,7 +31,10 @@ fn start_server() -> (Child, u16, u16) {
         "node_id = 'coord-test'\nrole = 'coordinator'\n",
     )
     .expect("Failed to write config.toml");
-    let mut cmd = Command::new(env::var("CARGO_BIN_EXE_minikv-coord").expect("CARGO_BIN_EXE_minikv-coord not set by cargo test"));
+    let mut cmd = Command::new(
+        env::var("CARGO_BIN_EXE_minikv-coord")
+            .expect("CARGO_BIN_EXE_minikv-coord not set by cargo test"),
+    );
     cmd.args([
         "serve",
         "--id",
