@@ -362,6 +362,3 @@ consider starring [whispem/minikv](https://github.com/whispem/minikv)! ⭐
 
 - GitHub: [@whispem](https://github.com/whispem)
 - Repo & Issues: [whispem/minikv](https://github.com/whispem/minikv/issues)
-
-
-[Back to Top](#minikv-)
