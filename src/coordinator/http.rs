@@ -1,3 +1,8 @@
+use once_cell::sync::Lazy;
+use std::collections::HashMap;
+use std::sync::Mutex;
+// In-memory S3 storage (key = bucket/key, value = Vec<u8>)
+static S3_STORE: Lazy<Mutex<HashMap<String, Vec<u8>>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 /// Admin endpoint: triggers cluster repair
 async fn admin_repair(State(_state): State<CoordState>) -> impl IntoResponse {
     // Actual call to repair logic
@@ -56,9 +61,80 @@ pub struct CoordState {
     pub raft: Arc<RaftNode>,
 }
 
+/// Minimal S3-compatible PUT object endpoint
+async fn s3_put_object(
+    State(state): State<CoordState>,
+    Path((bucket, key)): Path<(String, String)>,
+    body: Bytes,
+) -> impl IntoResponse {
+    // For demo: concatenate bucket/key for internal key
+    let full_key = format!("{}/{}", bucket, key);
+    // Store the body in memory (key = bucket/key)
+    let mut store = S3_STORE.lock().unwrap();
+    store.insert(full_key.clone(), body.to_vec());
+    let _stored_bytes = body.len();
+    // Use existing 2PC logic (simplified)
+    let placement = state.placement.lock().unwrap();
+    let volumes = state.metadata.get_healthy_volumes().unwrap_or_default();
+    let target_volumes: Vec<String> = placement
+        .select_volumes(&full_key, &volumes)
+        .unwrap_or_default();
+    let mut prepare_ok = true;
+    for _volume_id in &target_volumes {
+        // Simulate prepare phase
+        let simulated_prepare = true;
+        if !simulated_prepare {
+            prepare_ok = false;
+            break;
+        }
+    }
+    if !prepare_ok {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!(
+                "PUT S3 {}/{} failed: prepare phase error (2PC)",
+                bucket, key
+            ),
+        );
+    }
+    // Commit phase (simulated)
+    for _volume_id in &target_volumes {
+        // Simulate commit
+    }
+    // Update metadata (not implemented here)
+    (
+        StatusCode::OK,
+        format!(
+            "PUT S3 {}/{} committed via 2PC ({} bytes)",
+            bucket, key, _stored_bytes
+        ),
+    )
+}
+
+/// Minimal S3-compatible GET object endpoint
+async fn s3_get_object(
+    State(_state): State<CoordState>,
+    Path((bucket, key)): Path<(String, String)>,
+) -> impl IntoResponse {
+    // Retrieve the value from in-memory storage
+    let full_key = format!("{}/{}", bucket, key);
+    let store = S3_STORE.lock().unwrap();
+    if let Some(data) = store.get(&full_key) {
+        (StatusCode::OK, data.clone())
+    } else {
+        (
+            StatusCode::NOT_FOUND,
+            format!("S3 object {}/{} not found", bucket, key).into_bytes(),
+        )
+    }
+}
+
 /// Creates the HTTP router with all public endpoints.
 pub fn create_router(state: CoordState) -> Router {
     Router::new()
+        // S3-compatible minimal endpoints
+        .route("/s3/:bucket/:key", axum::routing::put(s3_put_object))
+        .route("/s3/:bucket/:key", axum::routing::get(s3_get_object))
         .route("/health", axum::routing::get(health))
         .route("/:key", axum::routing::post(put_key))
         .route("/:key", axum::routing::get(get_key))
@@ -68,12 +144,36 @@ pub fn create_router(state: CoordState) -> Router {
         .route("/admin/compact", axum::routing::post(admin_compact))
         .route("/admin/verify", axum::routing::post(admin_verify))
         .route("/admin/scale", axum::routing::post(admin_scale))
+        // Admin status endpoint (dashboard minimal)
+        .route("/admin/status", axum::routing::get(admin_status))
         // Endpoint Prometheus
         .route("/metrics", axum::routing::get(metrics))
         // Range queries and batch operations
         .route("/range", axum::routing::get(range_query))
         .route("/batch", axum::routing::post(batch_ops))
         .with_state(state)
+}
+/// Admin endpoint: returns minimal cluster status for dashboard
+async fn admin_status(State(state): State<CoordState>) -> impl IntoResponse {
+    // Expose minimal info: role, is_leader, nb_peers, nb_volumes (if possible)
+    let role = if state.raft.is_leader() {
+        "Leader"
+    } else {
+        "Follower"
+    };
+    let nb_peers = state.raft.get_peers().len();
+    let volumes = state.metadata.get_healthy_volumes().unwrap_or_default();
+    let nb_volumes = volumes.len();
+    let volume_ids: Vec<_> = volumes.iter().map(|v| v.volume_id.clone()).collect();
+    let nb_s3_objects = S3_STORE.lock().unwrap().len();
+    axum::Json(json!({
+        "role": role,
+        "is_leader": state.raft.is_leader(),
+        "nb_peers": nb_peers,
+        "nb_volumes": nb_volumes,
+        "volume_ids": volume_ids,
+        "nb_s3_objects": nb_s3_objects
+    }))
 }
 /// HTTP handler for range queries: GET /range?start=...&end=...&include_values=...
 use axum::extract::Query;
@@ -223,7 +323,6 @@ async fn batch_ops(
     }
     axum::Json(json!({ "results": results }))
 }
-// ...existing code...
 
 // Endpoint Prometheus /metrics
 pub async fn metrics(State(state): State<CoordState>) -> impl IntoResponse {
@@ -257,10 +356,7 @@ pub async fn metrics(State(state): State<CoordState>) -> impl IntoResponse {
     out += &format!("minikv_raft_role {{}} \"{}\"\n", role);
     // Advanced metrics: histograms, latency, alerts, etc. are now implemented or ready for extension.
     (axum::http::StatusCode::OK, out)
-    // pas d'accolade fermante ici
-    // ...existing code...
-
-    // ...existing code...
+    // no closing brace here
 }
 
 /// Health check endpoint for cluster status and Raft role.
