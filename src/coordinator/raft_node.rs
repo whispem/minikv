@@ -42,6 +42,10 @@ pub struct RaftNode {
 }
 
 impl RaftNode {
+    /// Get a copy of the current peer list
+    pub fn get_peers(&self) -> Vec<String> {
+        self.peers.lock().unwrap().clone()
+    }
     /// Detects a network partition (no heartbeat received)
     pub fn detect_partition(
         &self,
@@ -338,7 +342,7 @@ impl RaftNode {
         };
         let entry_snapshot = entry.clone();
         let node_id = self.node_id.clone();
-        let mut ack_count = 1; // Leader s’auto-ack
+        let mut ack_count = 1; // Leader self-ack
         for peer in &peers {
             let req = crate::common::raft::AppendRequest {
                 term,
@@ -356,7 +360,7 @@ impl RaftNode {
         }
         let majority = (peers.len() + 1).div_ceil(2);
         if ack_count >= majority {
-            // Commit effectif : avancer commit_index
+            // Effective commit: advance commit_index
             let mut commit = self.commit_index.lock().unwrap();
             *commit = index;
             let mut applied = self.last_applied.lock().unwrap();
@@ -373,7 +377,6 @@ impl RaftNode {
     }
 }
 
-// ...existing code...
 pub fn start_raft_tasks(node: Arc<RaftNode>) -> tokio::task::JoinHandle<()> {
     tokio::spawn({
         let node = node.clone();
