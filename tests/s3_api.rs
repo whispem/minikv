@@ -1,10 +1,10 @@
 //! Basic test for the S3-compatible API (PUT then GET)
 use reqwest::Client;
+use std::env;
 use std::net::TcpListener;
 use std::process::{Child, Command, Stdio};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
-use std::env;
 
 fn get_free_port() -> u16 {
     TcpListener::bind("127.0.0.1:0")
@@ -22,7 +22,10 @@ fn start_coord(http_port: u16, grpc_port: u16) -> Child {
         "node_id = 'coord-s3'\nrole = 'coordinator'\nreplicas = 1\n",
     )
     .expect("Failed to write config.toml");
-    let mut cmd = Command::new(env::var("CARGO_BIN_EXE_minikv-coord").expect("CARGO_BIN_EXE_minikv-coord not set by cargo test"));
+    let mut cmd = Command::new(
+        env::var("CARGO_BIN_EXE_minikv-coord")
+            .expect("CARGO_BIN_EXE_minikv-coord not set by cargo test"),
+    );
     cmd.args([
         "serve",
         "--id",
@@ -46,7 +49,10 @@ fn start_volume(http_port: u16, grpc_port: u16, coord_http_port: u16) -> Child {
     let _ = std::fs::remove_dir_all("vol-s3-wal");
     let _ = std::fs::create_dir_all("vol-s3-data");
     let _ = std::fs::create_dir_all("vol-s3-wal");
-    let mut cmd = Command::new(env::var("CARGO_BIN_EXE_minikv-volume").expect("CARGO_BIN_EXE_minikv-volume not set by cargo test"));
+    let mut cmd = Command::new(
+        env::var("CARGO_BIN_EXE_minikv-volume")
+            .expect("CARGO_BIN_EXE_minikv-volume not set by cargo test"),
+    );
     cmd.args([
         "serve",
         "--id",
