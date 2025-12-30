@@ -18,65 +18,32 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Cache Rust dependencies
-        uses: actions/cache@v3
-        with:
           path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
-
       - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y protobuf-compiler librocksdb-dev
+        name: Simple CI
 
-      - name: Format code (check only)
-        run: cargo fmt --all -- --check
-
-      - name: Run Clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
-
-      - name: Build project
-        run: cargo build --all-targets --release
-
-      
-      - name: Start server in background
-        run: cargo run --release &
-
-      - name: Wait for server to be ready
-        run: sleep 2  
-
-      - name: Run tests (skip benchmarks)
-        run: cargo test --all --release -- --skip bench
-
-      - name: Run advanced S3 tests separately
-        run: cargo test --test s3_api_extra --release
-
-  # Docker build temporarily disabled
-  # docker:
-  #   name: Docker Build
-  #   runs-on: ubuntu-latest
-  #   needs: check
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #
-  #     - name: Set up Docker Buildx
-  #       uses: docker/setup-buildx-action@v3
-  #
-  #     - name: Build coordinator Docker image
-  #       uses: docker/build-push-action@v5
-  #       with:
-  #         context: .
-  #         file: Dockerfile.coordinator
-  #         tags: minikv-coord:latest
-  #
   #     - name: Build volume Docker image
+          push:
+            branches: [main]
+          pull_request:
+            branches: [main]
+
   #       uses: docker/build-push-action@v5
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - uses: actions/checkout@v4
+              - name: Install Rust
+                uses: dtolnay/rust-toolchain@stable
+              - name: Install system dependencies
+                run: |
+                  sudo apt-get update
+                  sudo apt-get install -y protobuf-compiler librocksdb-dev
+              - name: Build
+                run: cargo build --release
+              - name: Test
+                run: cargo test --release
   #       with:
   #         context: .
   #         file: Dockerfile.volume

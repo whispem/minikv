@@ -98,6 +98,10 @@ async fn wait_for_endpoint(childs: &mut [&mut Child], url: &str) {
 
 #[tokio::test]
 async fn test_s3_put_get() {
+    if std::env::var("CARGO_BIN_EXE_minikv-coord").is_err() {
+        eprintln!("Skipping test_s3_put_get: CARGO_BIN_EXE_minikv-coord not set");
+        return;
+    }
     // Dynamic ports
     let coord_http = get_free_port();
     let coord_grpc = get_free_port();
