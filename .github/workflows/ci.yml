@@ -44,10 +44,17 @@ jobs:
       - name: Build project
         run: cargo build --all-targets --release
 
+      
+      - name: Start server in background
+        run: cargo run --release &
+
+      - name: Wait for server to be ready
+        run: sleep 2  
+
       - name: Run tests (skip benchmarks)
         run: cargo test --all --release -- --skip bench
 
-  # Docker build temporarily disabled - can be re-enabled later
+  # Docker build temporairement désactivé
   # docker:
   #   name: Docker Build
   #   runs-on: ubuntu-latest
