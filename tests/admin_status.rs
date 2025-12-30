@@ -85,6 +85,10 @@ async fn wait_for_server(child: &mut Child, http_port: u16) {
 
 #[tokio::test]
 async fn test_admin_status() {
+    if std::env::var("CARGO_BIN_EXE_minikv-coord").is_err() {
+        eprintln!("Skipping test_admin_status: CARGO_BIN_EXE_minikv-coord not set");
+        return;
+    }
     // Start the server
     let (mut server, http_port, _grpc_port) = start_server();
     // Wait until it is ready
