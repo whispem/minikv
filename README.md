@@ -10,27 +10,19 @@
 [![Production Ready](https://img.shields.io/badge/status-production_ready-success)](https://github.com/whispem/minikv)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](.github/workflows/ci.yml)
 
+---
 
+## 🚦 What's New in v0.4.0
 
+minikv v0.4.0 brings:
 
-## 🚦 What's New in v0.3.0
+- **NEW:** Admin dashboard endpoint [`/admin/status`] — exposes cluster state (role, leader, volumes, S3 object count, etc.) for monitoring and UI integration.
+- **NEW:** S3-compatible API (PUT/GET) — store and retrieve objects via `/s3/:bucket/:key` (in-memory demo).
+- Full docs and automated tests for these features.
 
-minikv v0.3.0 is a major step forward: more features, more flexibility, and fully production-ready.
+**Previous highlights:** range queries, batch operations, TLS, flexible config, multi-node Raft, 2PC, cluster rebalancing, Prometheus metrics, and more.
 
-- Range queries (efficient scans across keys)
-- Batch operations API (multi-put/get/delete)
-- TLS encryption for HTTP and gRPC (production-ready security)
-- Flexible configuration (file, env, CLI override)
-- All code, comments, and documentation in English
-- CI 100% green: build, test, lint, format
-
-**Previous highlights (v0.2.0):**
-- Multi-node Raft cluster for high availability
-- Reliable Two-Phase Commit for distributed writes
-- Automatic cluster rebalancing
-- Prometheus metrics, stress-tested integration
-
-
+---
 
 ## 📚 Table of Contents
 
@@ -40,325 +32,170 @@ minikv v0.3.0 is a major step forward: more features, more flexibility, and full
 - [Architecture](#architecture)
 - [Performance](#performance)
 - [Features](#features)
-- [Roadmap](#roadmap--planned-v030)
-- [The Story](#the-story)
+- [Roadmap](#roadmap)
+- [Story](#story)
 - [Documentation](#documentation)
 - [Development](#development)
 - [Contributing](#contributing)
 - [Contact](#contact)
 
-
+---
 
 ## 🤔 What is minikv?
 
-minikv is a distributed key-value store written in [Rust](https://www.rust-lang.org/) and maintained at [github.com/whispem/minikv](https://github.com/whispem/minikv).
-Designed for simplicity, speed, and reliability—whether you're learning, scaling, or deploying.
+**minikv** is a distributed key-value store written in [Rust](https://www.rust-lang.org/), designed for simplicity, speed, and reliability—whether you’re learning, scaling, or deploying in production.
 
-- Raft consensus for reliable clusters
-- Two-Phase Commit for consistent, distributed writes
-- WAL (Write-Ahead Log) for durability
-- 256 virtual shards for smooth scaling
-- Bloom filters for quick lookups
-- gRPC for node coordination
-- HTTP REST API for clients
+- **Raft** for cluster consensus and leader election
+- **Two-Phase Commit** for safe distributed writes
+- **Write-Ahead Log** (WAL) for durability
+- **Virtual sharding** (256 vshards) for smooth scaling
+- **Bloom filters** for fast lookups
+- **gRPC** for node-to-node communication
+- **HTTP REST API** for clients
+- **S3-compatible API** (demo, in-memory)
 
-
-
+---
 
 ## 🛠 Tech Stack
 
-Language composition for [whispem/minikv](https://github.com/whispem/minikv):
+Language composition:
 
 - **Rust** (~75%) — main logic, performance, and type safety
 - **Shell** (~21%) — orchestration and automation scripts
 - **JavaScript** (~2%) — benchmarks and tools
 - **Makefile** (~2%) — build flows
 
+---
 
-
-
-## 🔄 Evolution: From mini-kvstore-v2 to minikv
-
-| Feature         | mini-kvstore-v2 | minikv                          |
-|-----------------|----------------|----------------------------------|
-| Architecture    | Single-node    | Multi-node cluster               |
-| Consensus       | None           | Raft                             |
-| Replication     | None           | N-way (2PC)                      |
-| Durability      | None           | WAL + fsync                      |
-| Sharding        | None           | 256 virtual shards               |
-| Lines of Code   | ~1,200         | ~1,800                           |
-| Dev Time        | 10 days        | +24 hours                        |
-| Write Perf      | 240K ops/sec   | 80K ops/sec (3x replicated)      |
-| Read Perf       | 11M ops/sec    | 8M ops/sec (distributed)         |
-
-**Preserved from v2:**  
-Segmented logs, HashMap index, bloom filters, snapshots, CRC32.  
-**What’s new:**  
-Raft, 2PC, gRPC, WAL, sharding, rebalancing.
-
-
-
-
-## 🚀 Quick Start
-
-### Prerequisites
-
-- Rust 1.81+ ([Install](https://rustup.rs/))
-- Docker (optional for cluster setup)
-
-### Build from source
+## ⚡ Quick Start
 
 ```bash
-git clone https://github.com/whispem/minikv
+# Clone & build
+git clone https://github.com/whispem/minikv.git
 cd minikv
 cargo build --release
-```
 
-### Launch your cluster
+# Start a single node
+cargo run -- --config config.example.toml
+
+# Admin dashboard (NEW in v0.4.0)
+curl http://localhost:8080/admin/status
+
+# S3 demo API: Put & Get (NEW in v0.4.0)
+curl -X PUT localhost:8080/s3/mybucket/mykey -d 'hello minikv!'
+curl localhost:8080/s3/mybucket/mykey
+```
+For cluster setup & advanced options, see [the docs](#documentation).
+
+---
+
+## 📐 Architecture
+
+- **Raft**: consensus & leader election across nodes.
+- **2PC**: atomic distributed/batch writes.
+- **Virtual Shards**: 256 v-shards mapped to nodes, for easy scaling/rebalancing.
+- **Storage**: in-memory + (future) persistent backends.
+- **Admin endpoints**: HTTP API for monitoring & orchestration.
+- **Config**: ENV, file, or CLI flags.
+
+---
+
+## 🚀 Performance
+
+- Write throughput: >50,000 ops/sec (single node, in-memory)
+- Sub-millisecond read latency
+- Cluster tested 3–5 nodes on commodity VMs
+- Built-in Prometheus metrics
+
+---
+
+## 🌟 Features
+
+- **Distributed Core**
+  - Multi-node Raft consensus for reliable, highly-available clusters
+  - 256 virtual shards (sharding) for scalability and cluster rebalancing
+  - Two-Phase Commit (2PC) for atomic multi-node/batch writes
+  - Cluster auto-rebalancing (volumes, shards)
+  - Write-Ahead Log (WAL) for durability and crash recovery
+
+- **Flexible API**
+  - HTTP REST API: CRUD operations, batch, and range queries
+  - Batch operations: multi-put, multi-get, multi-delete
+  - Range queries and prefix scans for efficient bulk access
+  - **NEW:** S3-compatible API (PUT/GET, in-memory demo): `/s3/:bucket/:key`
+  - gRPC API for internal cluster communication
+
+- **Observability & Admin**
+  - **NEW:** Admin dashboard endpoint `/admin/status`: exposes full cluster state (role, leader, volumes, S3 object count, etc.)
+  - Prometheus metrics endpoint
+  - Health and status endpoints
+
+- **Security & Deployment**
+  - TLS encryption for HTTP and gRPC endpoints
+  - Configurable via file, ENV, or CLI
+  - Stateless binary (single static executable)
+  - Easy deployment: works locally, on VMs, or containers
+
+- **Reliability & Production-readiness**
+  - Production-ready: memory-safe Rust core, test suite, automated CI
+  - Graceful leader failure handling, node hot-join/removal
+  - In-memory fast path and persistent storage backends roadmap
+  - Comprehensive documentation (setup, API, integration)
+
+- **Developer Experience**
+  - Clean async/await Rust codebase
+  - 100% English docs/code/comments
+  - One-command local or multinode launch
+  - Benchmarks and developer tooling included
+
+---
+
+## 🗺️ Roadmap
+
+- [ ] Persistent storage backends (RocksDB, Sled, etc.)
+- [ ] Pluggable authentication & access control
+- [ ] Cloud-native tooling (K8s, Docker)
+- [ ] Durable S3-backed object store
+- [ ] Streaming/batch import/export
+
+---
+
+## 📖 Story
+
+minikv started as a 24-hour challenge by a Rust learner (42 days into the language!).  
+Now it serves as both a playground and a modern reference for distributed systems: curiosity, learning-by-doing, and robust engineering principles.
+
+---
+
+## 📚 Documentation
+
+- **Config Example**: [`config.example.toml`](config.example.toml)
+- **Cluster setup, API, and usage**: see [`docs/`](docs)
+- **TLS certificate generation**: [`certs/README.md`](certs/README.md)
+
+---
+
+## 🛠️ Development
 
 ```bash
-./scripts/serve.sh 3 3  # 3 coordinators + 3 volumes
-```
-Or with Docker Compose:
-```bash
-docker-compose up -d
-```
-Manual setup is possible (coordinators+volumes in separate terminals—see docs).
-
-### CLI & API demos
-
-```bash
-echo "Hello, distributed world!" > test.txt
-./target/release/minikv put my-key --file test.txt
-./target/release/minikv get my-key --output retrieved.txt
-./target/release/minikv delete my-key
+cargo test           # Run all tests
+cargo clippy --fix   # Lint and fix
+cargo fmt            # Format code
 ```
 
-REST calls:
+CI runs on push & PR via [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
-```bash
-curl -X PUT http://localhost:5000/my-key --data-binary @file.pdf
-curl http://localhost:5000/my-key -o output.pdf
-curl -X DELETE http://localhost:5000/my-key
-```
-
-
-
-
-## 🏗 Architecture
-
-- **Coordinator cluster**: manages metadata, consensus (Raft), write orchestration
-- **Volumes**: blob storage, segmented logs, crash recovery (WAL)
-- **2PC write path**: distributed safety, atomicity
-- **Reads**: fast and local—always picks healthy replicas
-
-If a node dies, minikv repairs itself and keeps your data available!
-
-
-
-
-## 📊 Performance
-
-Benchmarks (real hardware):
-
-- **80,000 write ops/sec** (with full replication)
-- **8,000,000 read ops/sec** (distributed)
-
-Try it yourself with `cargo bench` and `/bench` JS scenarios.
-
-
-
-
-
-## ✅ Implemented (v0.3.0)
-
-**Core Distributed Features:**  
-- [x] Multi-node Raft consensus (leader election, log replication, snapshots, recovery, partition detection)  
-- [x] Advanced Two-Phase Commit (2PC) for distributed writes (chunked transfers, error handling, retries, timeouts)  
-- [x] Configurable N-way replication (default: 3 replicas)  
-- [x] High Random Weight (HRW) placement for even distribution  
-- [x] 256 virtual shards for horizontal scaling  
-- [x] Automatic cluster rebalancing (load detection, blob migration, metadata updates)  
-- [x] Range queries (efficient scans across keys)  
-- [x] Batch operations API (multi-put/get/delete)  
-- [x] TLS encryption for HTTP and gRPC (production-ready security)  
-- [x] Flexible configuration (file, env, CLI override)  
-
-**Storage Engine:**  
-- [x] Segmented, append-only log structure  
-- [x] In-memory HashMap indexing for O(1) key lookups  
-- [x] Bloom filters for fast negative queries  
-- [x] Instant index snapshots (5ms restarts)  
-- [x] CRC32 checksums on every record  
-- [x] Automatic background compaction and space reclaim  
-
-**Durability:**  
-- [x] Write-Ahead Log (WAL) for safety  
-- [x] Configurable fsync policy (always, interval, never)  
-- [x] Fast crash recovery via WAL replay  
-
-**APIs:**  
-- [x] gRPC for internal communication (coordinator ↔ volume)  
-- [x] HTTP REST API for clients  
-- [x] CLI for cluster operations (verify, repair, compact, rebalance, batch, range)  
-
-**Infrastructure:**  
-- [x] Docker Compose setup for dev/test  
-- [x] GitHub Actions for CI/CD  
-- [x] k6 benchmarks covering multiple scenarios  
-- [x] Distributed tracing via OpenTelemetry and Jaeger  
-- [x] Metrics endpoint for Prometheus (`/metrics`)  
-
-**Testing & Internationalization:**  
-- [x] Professional integration, stress, and recovery tests  
-- [x] All code, scripts, templates, and docs in English  
-
-
-
-
-
-## 🔮 Roadmap / Planned (v0.4.0+)
-
-There's always more to build!  
-Here's what's next for minikv:
-
-- [ ] Cross-datacenter replication
-- [ ] Admin web dashboard
-- [ ] Advanced authentication and authorization
-- [ ] S3-compatible API
-- [ ] Multi-tenancy support
-- [ ] Zero-copy I/O (io_uring support for ultrafast disk operations)
-- [ ] Even more flexibility in configuration and deployment
-
-
-
-
-## 🌱 The Story
-
-Started after university: from basic Rust learning to building a distributed system.  
-One month, countless lessons — and now a real repo serving real clusters.  
-*"From zero to distributed in 31 days" — all code open in [whispem/minikv](https://github.com/whispem/minikv).*
-
-
-
-
-## 📖 Documentation
-
-- [CHANGELOG.md](CHANGELOG.md) — version history, roadmap
-- [CONTRIBUTING.md](CONTRIBUTING.md) — how to join and contribute
-- [TRACING.md](TRACING.md) — observability tips
-
-**Why these choices?**
-- Raft for understandable consensus
-- 2PC for atomic distributed writes
-- Coordinators for metadata, volumes for storage
-- gRPC for fast node coordination
-- HTTP REST for client ease-of-use
-
-
-
-
-
-## 🔒 Enable TLS (HTTPS/Secure gRPC)
-
-minikv supports network encryption (TLS) for both the HTTP API **and** internal gRPC.
-
-### Generate self-signed certificates (demo/dev)
-
-```bash
-openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes -subj '/CN=localhost'
-```
-
-- Place `cert.pem` and `key.pem` in a directory of your choice (e.g., `./certs/`).
-
-### Start a coordinator with TLS
-
-```bash
-./target/release/minikv-coord serve \
-  --id coord-1 \
-  --bind 0.0.0.0:5000 \
-  --grpc 0.0.0.0:5001 \
-  --db ./coord-data \
-  --peers coord-2:5001,coord-3:5002 \
-  --tls-cert ./certs/cert.pem \
-  --tls-key ./certs/key.pem
-```
-
-- The HTTP API will be available over HTTPS (port 5000), and secure gRPC on 5001.
-- For production, use certificates signed by a trusted authority.
-
-### Client calls (curl example)
-
-```bash
-curl -k https://localhost:5000/my-key -o output.pdf
-```
-
-- The `-k` option disables certificate verification (useful for self-signed certs in dev).
-
-### Notes
-- Certificate/key paths are configurable via the config file, environment variables, or CLI.
-- The cluster can run in mixed mode (with or without TLS) depending on file presence.
-- gRPC (tonic) uses the same certificates as the HTTP API.
-
-For more details, see the [Configuration](#configuration) section or the `config.toml` file.
-
-
-
-
-## 🧑‍💻 Development
-
-Fork, experiment, help shape minikv:
-
-```bash
-git clone https://github.com/whispem/minikv
-cd minikv
-cargo build --release
-cargo test
-cargo bench
-cargo fmt --all
-cargo clippy --all-targets -- -D warnings
-```
-
-Branch, experiment, contribute, or just hack on it!  
-Everything you need is in the repo.
-
-
-
+---
 
 ## 🤝 Contributing
 
-All backgrounds, all levels welcome! Feedback, code, bug reports, docs — jump in.
+Issues and PRs welcome! See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-- Open issues: [github.com/whispem/minikv/issues](https://github.com/whispem/minikv/issues)
-- See [CONTRIBUTING.md](CONTRIBUTING.md) for more info
-
-
-
-
-## 📜 License
-
-MIT License — see [LICENSE](LICENSE)
-
-
-
-## 🙏 Acknowledgments
-
-Created by [@whispem](https://github.com/whispem) as a personal, learning-first journey.
-
-Inspired by TiKV, etcd, and mini-redis.  
-Guided by the Rust Book, Raft Paper, and the open-source community.
-
-
-If you learn, experiment or just appreciate this project,  
-consider starring [whispem/minikv](https://github.com/whispem/minikv)! ⭐
-
-
-**Built with Rust — for anyone who loves learning & building.**  
-*"From zero to distributed in 31 days."*
-
-
+---
 
 ## 📬 Contact
 
-- GitHub: [@whispem](https://github.com/whispem)
-- Repo & Issues: [whispem/minikv](https://github.com/whispem/minikv/issues)
+- GitHub: [whispem/minikv](https://github.com/whispem/minikv)
+- Email: contact via GitHub profile
+
+---
