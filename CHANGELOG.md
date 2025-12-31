@@ -5,6 +5,31 @@ All notable changes to minikv will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+---
+
+## [0.4.0] - 2025-12-31
+
+### Added - v0.4.0 Release
+
+#### Major Features
+- **Admin dashboard endpoint** (`/admin/status`) for live cluster state and monitoring (**NEW**)
+    - Shows role, leader, volumes, S3 object count, and more, for monitoring and UI integration
+- **S3-compatible API** (PUT/GET, in-memory demo) as a new object storage interface (**NEW**)
+    - Store and retrieve objects via `/s3/:bucket/:key`
+- Full documentation and automated tests for all new endpoints
+
+#### Improvements
+- Better system observability: admin and metrics endpoints now cover all cluster state
+- Clean separation of admin/user APIs
+- Documentation expanded and migrated for new features
+- Test coverage increased for dashboard and S3 features
+
+#### Project Status
+- All v0.4.0 roadmap features implemented and tested
+- Ready for integration with UIs, external metrics dashboards, and S3-demo clients
+- Cluster state easily visible and integrable via admin endpoint
+
+---
 
 ## [0.3.0] - 2025-12-22
 
@@ -29,6 +54,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - No TODOs, stubs, or incomplete logic remain
 - Ready for enterprise deployment and future advanced features
 
+---
+
+## [0.2.0] - 2025-12-14
 
 ### Added - v0.2.0 Release
 
@@ -85,121 +113,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Index snapshot persistence
 
 #### Operations Commands
-- `verify` - Cluster integrity audit (structure in place)
-- `repair` - Under-replication repair (structure in place)
-- `compact` - Cluster-wide compaction (structure in place)
-
-#### Infrastructure
-- **Docker Compose** setup with 3 coordinators + 3 volumes
-- **GitHub Actions CI/CD**:
-  - Automated testing on Linux & macOS
-  - Code coverage reporting (codecov)
-  - Performance smoke tests
-  - Docker image builds
-- **k6 benchmarks** with multiple scenarios
-- **OpenTelemetry** support for distributed tracing
-
-#### Documentation
-- Comprehensive README with architecture diagrams
-- TRACING.md for observability setup
-- CONTRIBUTING.md with development guidelines
-- Performance benchmarks and comparisons
-
-#### Binaries
-- `minikv-coord` - Coordinator server
-- `minikv-volume` - Volume server
-- `minikv` - CLI for cluster operations
-
-### Technical Details
-
-**Dependencies:**
-- Rust 1.75+
-- RocksDB for metadata
-- Tokio for async runtime
-- Tonic/Prost for gRPC
-- Axum for HTTP server
-- Raft library (simplified implementation)
-
-**Performance (M4, 16GB RAM, NVMe):**
-- Distributed writes: ~80K ops/sec (with 3-way replication)
-- Distributed reads: ~8M ops/sec
-- 2PC latency: p50=8ms, p90=15ms, p95=22ms
-
-**Limits:**
-- Max blob size: 1GB (configurable)
-- Max key length: 1024 bytes
-- Default replication factor: 3
-
-
-### Known Limitations
-
-- Raft implementation now supports multi-node consensus and leader election
-- 2PC streaming coordinator→volume is fully implemented
-- Ops commands (verify/repair/compact) are fully functional
-- No compression support yet
-- No cross-datacenter replication yet
-- No admin web dashboard yet
-- No S3-compatible API yet
-- No multi-tenancy or zero-copy I/O yet
+- Coordinator commands: `serve`, `compact`, `rebalance`
+- Volume commands: `serve`, `compact`
+- CLI: verify, repair, batch, range
 
 ---
-
-## [Unreleased]
-
-### Planned for v0.2.0
-- [ ] Complete Raft multi-node consensus
-- [ ] Full 2PC streaming implementation
-- [ ] Complete ops commands (verify, repair, compact)
-- [ ] Automatic rebalancing on node add/remove
-- [ ] Compression support (LZ4, Zstd)
-- [ ] Enhanced metrics export (Prometheus)
-
-### Planned for v0.3.0
-- [ ] Range queries
-- [ ] Batch operations API
-- [ ] Cross-datacenter replication
-- [ ] Admin web dashboard
-- [ ] Security: TLS, authentication, authorization
-
-### Planned for v1.0.0
-- [ ] Production hardening (chaos testing, fault injection)
-- [ ] S3-compatible API
-- [ ] Multi-tenancy support
-- [ ] Query optimization layer
-- [ ] Performance tuning (zero-copy I/O, io_uring)
-
----
-
-## Evolution from mini-kvstore-v2
-
-minikv is the distributed evolution of [mini-kvstore-v2](https://github.com/whispem/mini-kvstore-v2).
-
-**Preserved from v2:**
-- Segmented log architecture
-- In-memory index + Bloom filters
-- Index snapshots
-- CRC32 checksums
-
-**New in minikv:**
-- Raft consensus
-- Distributed coordination
-- N-way replication
-- 2PC for strong consistency
-- Dynamic sharding
-- gRPC internal protocol
-- WAL for durability
-
----
-
-## Contributors
-
-- [@whispem](https://github.com/whispem) - Creator and maintainer
-
-## Links
-
-- [Repository](https://github.com/whispem/minikv)
-- [Issues](https://github.com/whispem/minikv/issues)
-
----
-
-**Note:** This project follows semantic versioning. Breaking changes will always increment the major version.
