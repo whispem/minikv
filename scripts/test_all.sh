@@ -10,4 +10,4 @@ cargo test --test s3_api_extra --release
 # Clean up test-generated files
 rm -rf coord-* vol-* /tmp/minikv-config-*.toml *.log
 
-echo "✅ All tests passed and the workspace is clean."
+echo "All tests passed and the workspace is clean."
