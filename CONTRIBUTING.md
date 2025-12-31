@@ -1,7 +1,8 @@
 # Contributing to minikv 🦀
 
-Thank you for your interest in **minikv**! Contributions — bug reports, code, docs, or design feedback — are more than welcome.
+Thank you for your interest in **minikv**! Contributions — bug reports, code, docs, or design & performance feedback — are always welcome.
 
+---
 
 ## Quick Start
 
@@ -12,92 +13,101 @@ cd minikv
 
 # Build & test
 cargo build --release
-cargo test          # All unit & integration tests
+cargo test             # All unit & integration tests
 
-# Format & lint
+# Format & lint (must pass before PR)
 cargo fmt --all
 cargo clippy --all-targets -- -D warnings
 ```
 
+---
 
 ## How to Contribute
 
-- **Bug report**: Open an [issue](https://github.com/whispem/minikv/issues) with as much detail as possible (stacktrace, reproduction, expected/actual).
-- **Feature request/discussion**: Open an issue or Pull Request (PR) — all proposals are welcome.
-- **Code**: Fork, branch, commit, PR! See **Development Workflow** below.
-- **Docs**: Spotted a typo, missing info, or want to improve clarity? PRs always welcome.
+- **Bug report**: Open an [issue](https://github.com/whispem/minikv/issues) with detail (stacktrace, repro steps, expected/actual).
+- **Feature request / UX / roadmap discussion**: Open an issue or new PR — all proposals are welcome.
+- **Code**: Fork, branch, commit, PR! See workflow below.
+- **Docs**: PRs on typos, missing info, or improved clarity always welcome.
 
+---
 
+## Scope & Current Status
 
-## Current Scope & Status
+All **core distributed features** for v0.4.0 are implemented and production-ready:
 
-All **core distributed features** for v0.3.0 are complete and production-ready:
+- Multi-node Raft consensus (leader, replication, snapshot, recovery)
+- Two-Phase Commit (2PC) protocol for distributed atomic writes
+- Automatic cluster rebalancing (shards, blob migration, metadata updates)
+- WAL for durability; O(1) indexing, CRC32, fast crash recovery
+- HTTP REST API, gRPC for internode, CLI for ops (verify, repair, compact, rebalance, batch, range)
+- Range queries, batch multi-key operations
+- TLS encryption for HTTP & gRPC
+- Flexible config: file, env, CLI
+- Prometheus `/metrics`, distributed tracing
+- **Admin dashboard endpoint** (`/admin/status`) for cluster monitoring (**NEW in v0.4.0**)
+- **S3-compatible API** (PUT/GET, in-memory demo) (**NEW in v0.4.0**)
+- Extensive automated tests & documentation
 
-- Multi-node Raft consensus (leader election, replication, snapshot, recovery)
-- Two-Phase Commit (2PC) protocol for distributed writes
-- Automatic cluster rebalancing (load detection, blob migration, metadata update)
-- WAL for durability; O(1) HashMap indexing, CRC32, quick crash recovery
-- HTTP API, gRPC for cluster internals, CLI for ops (verify, repair, compact, rebalance, batch, range)
-- Range queries (efficient scans across keys)
-- Batch operations API (multi-put/get/delete)
-- TLS encryption for HTTP and gRPC (production-ready security)
-- Flexible configuration (file, env, CLI override)
-- Prometheus `/metrics`, distributed tracing, k6 benchmark suites
-- Docs, scripts, templates — all in English
+**If something doesn’t work as documented, please open an issue!**
 
-**If something doesn’t work as documented, please open an issue**!
+---
 
+## What’s Next? (Contributions welcome)
 
+The next big priorities (v0.5.0+) include:
 
-## What’s Next? (You can Help!)
+- Persistent on-disk storage backends (e.g. RocksDB, Sled)
+- Cross-datacenter and multi-region replication
+- Durable S3-backed object store
+- Advanced authentication & access control
+- Real admin web UI/dashboard
+- Chaos & resilience tooling, perf (io_uring/zero-copy), enhanced deployment options
 
-The next major priorities for minikv (planned v0.4.0+) are:
-- Cross-datacenter replication / topology changes
-- S3-compatible API & Multi-tenancy
-- Advanced authentication and authorization (ACLs)
-- Admin dashboard (web), smoother upgrades/rolling ops
-- Chaos testing, perf tuning (io_uring, zero-copy), more resilience
+> *Interested in one of these, or have new ideas? Open a discussion or issue!*
 
-*Want to work on any of these? Let’s sync in an issue or discussion!*
-
+---
 
 ## Development Workflow
 
 1. **Branch**
-    ```bash
-    git checkout -b feature/my-feature
-    ```
-2. **Make changes** (with clear comments, error handling, and tests if possible)
+   ```bash
+   git checkout -b feature/my-feature
+   ```
+2. **Make changes** (clear code & comments, handle errors, add/update tests)
 3. **Test**
-    ```bash
-    cargo test
-    ```
+   ```bash
+   cargo test
+   ```
 4. **Lint & format**
-    ```bash
-    cargo fmt --all
-    cargo clippy --all-targets -- -D warnings
-    ```
-5. **Commit (Conventional commits encouraged)**
-    ```bash
-    git commit -m "feat(raft): improve vote timeout randomization"
-    ```
-6. **Push & Open PR!**
+   ```bash
+   cargo fmt --all
+   cargo clippy --all-targets -- -D warnings
+   ```
+5. **Commit** (Conventional commits encouraged)
+   ```bash
+   git commit -m "feat(api): add S3 object PUT endpoint"
+   ```
+6. **Push & open Pull Request** — fill the PR template and/or describe the fix/feature!
 
+---
 
 ## Code Style
 
 - **4-space indentation**
-- **Comprehensive doc comments** (///, //!) and code comments (`// Why?`)
+- **Comprehensive doc comments** (`///`, `//!`) and code comments (`// Why?`)
 - **Pass all tests & lints**
-- **Include or update relevant docs**
+- **Update or add relevant docs**
+- **Prefer English for all code, comments, and docs**
 
+---
 
 ## Project Values
 
-- **Simplicity first** (documentation, code, UX)
-- **Welcoming, inclusive** — newcomers, experts, all backgrounds welcome!
-- **Curiosity and learning**: Even PR drafts/tutorials/brainstorms matter.
+- **Simplicity first** — clear documentation, code, and UX
+- **Welcoming, inclusive** — newcomers, experts, and all backgrounds welcome!
+- **Curiosity & learning** — PR drafts, tutorials, design brainstorms all valued
 
+---
 
 ## Need Help? Have Questions?
 
@@ -105,5 +115,6 @@ The next major priorities for minikv (planned v0.4.0+) are:
 - Discussion tab (if enabled)
 - Contact: [@whispem](https://github.com/whispem)
 
+---
 
-**Thanks again for helping build an awesome distributed system, open to anyone curious! 🚀**
+**Thanks for helping build an open, robust distributed system — open to anyone curious! 🚀**
