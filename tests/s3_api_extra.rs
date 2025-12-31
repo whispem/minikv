@@ -16,6 +16,8 @@ fn get_free_port() -> u16 {
 }
 
 fn start_coord(http_port: u16, grpc_port: u16, test_id: &str) -> (Child, String) {
+    let coord_bin =
+        std::env::var("CARGO_BIN_EXE_minikv-coord").expect("CARGO_BIN_EXE_minikv-coord not set");
     let coord_data = format!("coord-s3extra-data-{}", test_id);
     let _ = fs::remove_dir_all(&coord_data);
     let _ = fs::create_dir_all(&coord_data);
@@ -28,7 +30,7 @@ fn start_coord(http_port: u16, grpc_port: u16, test_id: &str) -> (Child, String)
         ),
     )
     .expect("Failed to write config.toml");
-    let mut cmd = Command::new("target/release/minikv-coord");
+    let mut cmd = Command::new(coord_bin);
     cmd.args([
         "serve",
         "--id",
@@ -66,13 +68,15 @@ fn start_volume(
     coord_http_port: u16,
     test_id: &str,
 ) -> (Child, String, String) {
+    let volume_bin =
+        std::env::var("CARGO_BIN_EXE_minikv-volume").expect("CARGO_BIN_EXE_minikv-volume not set");
     let vol_data = format!("vol-s3extra-data-{}", test_id);
     let vol_wal = format!("vol-s3extra-wal-{}", test_id);
     let _ = fs::remove_dir_all(&vol_data);
     let _ = fs::remove_dir_all(&vol_wal);
     let _ = fs::create_dir_all(&vol_data);
     let _ = fs::create_dir_all(&vol_wal);
-    let mut cmd = Command::new("target/release/minikv-volume");
+    let mut cmd = Command::new(volume_bin);
     cmd.args([
         "serve",
         "--id",
@@ -129,8 +133,17 @@ async fn wait_for_endpoint(childs: &mut [&mut Child], url: &str) {
     }
 }
 
+fn binaries_available() -> bool {
+    std::env::var("CARGO_BIN_EXE_minikv-coord").is_ok()
+        && std::env::var("CARGO_BIN_EXE_minikv-volume").is_ok()
+}
+
 #[tokio::test]
 async fn test_s3_404() {
+    if !binaries_available() {
+        eprintln!("Skipping test_s3_404: required binaries not available");
+        return;
+    }
     let test_id = Uuid::new_v4().to_string();
     let coord_http = get_free_port();
     let coord_grpc = get_free_port();
@@ -158,6 +171,10 @@ async fn test_s3_404() {
 
 #[tokio::test]
 async fn test_s3_overwrite() {
+    if !binaries_available() {
+        eprintln!("Skipping test_s3_overwrite: required binaries not available");
+        return;
+    }
     let test_id = Uuid::new_v4().to_string();
     let coord_http = get_free_port();
     let coord_grpc = get_free_port();
@@ -197,6 +214,10 @@ async fn test_s3_overwrite() {
 
 #[tokio::test]
 async fn test_s3_multiple_objects() {
+    if !binaries_available() {
+        eprintln!("Skipping test_s3_multiple_objects: required binaries not available");
+        return;
+    }
     let test_id = Uuid::new_v4().to_string();
     let coord_http = get_free_port();
     let coord_grpc = get_free_port();

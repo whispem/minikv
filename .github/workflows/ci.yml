@@ -1,3 +1,4 @@
+
 name: CI
 
 on:
@@ -11,40 +12,28 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
-  check:
-    name: Rust Check & Test
+  build-test:
+    name: Build, Lint, Format, Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Cache Rust dependencies
-          path: |
+      - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+
       - name: Install system dependencies
-        name: Simple CI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler librocksdb-dev
 
-  #     - name: Build volume Docker image
-          push:
-            branches: [main]
-          pull_request:
-            branches: [main]
+      - name: Check formatting
+        run: cargo fmt --all -- --check
 
-  #       uses: docker/build-push-action@v5
-          test:
-            runs-on: ubuntu-latest
-            steps:
-              - uses: actions/checkout@v4
-              - name: Install Rust
-                uses: dtolnay/rust-toolchain@stable
-              - name: Install system dependencies
-                run: |
-                  sudo apt-get update
-                  sudo apt-get install -y protobuf-compiler librocksdb-dev
-              - name: Build
-                run: cargo build --release
-              - name: Test
-                run: cargo test --release
-  #       with:
-  #         context: .
-  #         file: Dockerfile.volume
-  #         tags: minikv-volume:latest
+      - name: Lint (clippy)
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Build
+        run: cargo build --release
+
+      - name: Test
+        run: cargo test --release
