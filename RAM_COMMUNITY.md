@@ -26,7 +26,7 @@ RAM brings together people who want to learn, build, and share Rust — whether 
 
 
 
-## 📢 Our Community (as of Month 1)
+## 📢 Our Community
 
 - **53 members** on Discord
 - **79 followers** on LinkedIn
