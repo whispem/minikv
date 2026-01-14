@@ -6,8 +6,8 @@ impl Config {
             .add_source(config::File::with_name("config.local.toml").required(false))
             .add_source(config::Environment::with_prefix("MINIKV").separator("_"))
             .build()
-            .expect("Erreur chargement config");
-        s.try_deserialize().expect("Erreur parsing config")
+            .expect("Failed to load config");
+        s.try_deserialize().expect("Failed to parse config")
     }
 }
 
