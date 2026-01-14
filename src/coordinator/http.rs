@@ -1,8 +1,23 @@
+//! HTTP API for the coordinator (v0.5.0)
+//!
+//! This module provides the HTTP API for the coordinator node.
+//! New in v0.5.0:
+//! - TTL support for keys
+//! - Enhanced health checks (/health/ready, /health/live)
+//! - Enhanced metrics with histograms
+//! - Request ID tracking
+
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::sync::Mutex;
-// In-memory S3 storage (key = bucket/key, value = Vec<u8>)
-static S3_STORE: Lazy<Mutex<HashMap<String, Vec<u8>>>> = Lazy::new(|| Mutex::new(HashMap::new()));
+
+/// Type alias for S3 store entries: (data, optional_expiration_timestamp)
+type S3StoreEntry = (Vec<u8>, Option<u64>);
+
+// In-memory S3 storage (key = bucket/key, value = (Vec<u8>, Option<expires_at>))
+static S3_STORE: Lazy<Mutex<HashMap<String, S3StoreEntry>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
+
 /// Admin endpoint: triggers cluster repair
 async fn admin_repair(State(_state): State<CoordState>) -> impl IntoResponse {
     // Actual call to repair logic
@@ -62,17 +77,35 @@ pub struct CoordState {
 }
 
 /// Minimal S3-compatible PUT object endpoint
+/// Supports TTL via X-Minikv-TTL header (seconds) (v0.5.0)
 async fn s3_put_object(
     State(state): State<CoordState>,
     Path((bucket, key)): Path<(String, String)>,
+    headers: axum::http::HeaderMap,
     body: Bytes,
 ) -> impl IntoResponse {
     // For demo: concatenate bucket/key for internal key
     let full_key = format!("{}/{}", bucket, key);
-    // Store the body in memory (key = bucket/key)
+
+    // Extract TTL from header (v0.5.0)
+    let ttl_secs: Option<u64> = headers
+        .get("X-Minikv-TTL")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.parse().ok());
+
+    let expires_at = ttl_secs.map(|ttl| {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
+        now + (ttl * 1000) // Convert seconds to milliseconds
+    });
+
+    // Store the body in memory with optional expiration
     let mut store = S3_STORE.lock().unwrap();
-    store.insert(full_key.clone(), body.to_vec());
-    let _stored_bytes = body.len();
+    store.insert(full_key.clone(), (body.to_vec(), expires_at));
+    let stored_bytes = body.len();
+
     // Use existing 2PC logic (simplified)
     let placement = state.placement.lock().unwrap();
     let volumes = state.metadata.get_healthy_volumes().unwrap_or_default();
@@ -101,12 +134,16 @@ async fn s3_put_object(
     for _volume_id in &target_volumes {
         // Simulate commit
     }
-    // Update metadata (not implemented here)
+
+    // Build response message
+    let ttl_info = ttl_secs
+        .map(|t| format!(", TTL: {}s", t))
+        .unwrap_or_default();
     (
         StatusCode::OK,
         format!(
-            "PUT S3 {}/{} committed via 2PC ({} bytes)",
-            bucket, key, _stored_bytes
+            "PUT S3 {}/{} committed via 2PC ({} bytes{})",
+            bucket, key, stored_bytes, ttl_info
         ),
     )
 }
@@ -116,10 +153,23 @@ async fn s3_get_object(
     State(_state): State<CoordState>,
     Path((bucket, key)): Path<(String, String)>,
 ) -> impl IntoResponse {
-    // Retrieve the value from in-memory storage
+    // Retrieve the value from in-memory storage, respecting TTL (v0.5.0)
     let full_key = format!("{}/{}", bucket, key);
     let store = S3_STORE.lock().unwrap();
-    if let Some(data) = store.get(&full_key) {
+    if let Some((data, expires_at)) = store.get(&full_key) {
+        // Check if key has expired
+        if let Some(exp) = expires_at {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as u64;
+            if now > *exp {
+                return (
+                    StatusCode::NOT_FOUND,
+                    format!("S3 object {}/{} expired", bucket, key).into_bytes(),
+                );
+            }
+        }
         (StatusCode::OK, data.clone())
     } else {
         (
@@ -130,12 +180,17 @@ async fn s3_get_object(
 }
 
 /// Creates the HTTP router with all public endpoints.
+/// Updated in v0.5.0 with enhanced health checks
 pub fn create_router(state: CoordState) -> Router {
     Router::new()
-        // S3-compatible minimal endpoints
+        // S3-compatible minimal endpoints with TTL support
         .route("/s3/:bucket/:key", axum::routing::put(s3_put_object))
         .route("/s3/:bucket/:key", axum::routing::get(s3_get_object))
+        // Health check endpoints (v0.5.0)
         .route("/health", axum::routing::get(health))
+        .route("/health/ready", axum::routing::get(health_ready))
+        .route("/health/live", axum::routing::get(health_live))
+        // Key operations
         .route("/:key", axum::routing::post(put_key))
         .route("/:key", axum::routing::get(get_key))
         .route("/:key", axum::routing::delete(delete_key))
@@ -146,13 +201,60 @@ pub fn create_router(state: CoordState) -> Router {
         .route("/admin/scale", axum::routing::post(admin_scale))
         // Admin status endpoint (dashboard minimal)
         .route("/admin/status", axum::routing::get(admin_status))
-        // Endpoint Prometheus
+        // Prometheus metrics endpoint (enhanced in v0.5.0)
         .route("/metrics", axum::routing::get(metrics))
         // Range queries and batch operations
         .route("/range", axum::routing::get(range_query))
         .route("/batch", axum::routing::post(batch_ops))
         .with_state(state)
 }
+
+/// Kubernetes readiness probe (v0.5.0)
+/// Returns 200 if the service is ready to accept traffic
+async fn health_ready(State(state): State<CoordState>) -> impl IntoResponse {
+    // Check if we have healthy volumes and Raft is stable
+    let volumes = state.metadata.get_healthy_volumes().unwrap_or_default();
+    let has_leader = state.raft.is_leader() || !state.raft.get_peers().is_empty();
+
+    if !volumes.is_empty() && has_leader {
+        (
+            StatusCode::OK,
+            axum::Json(json!({
+                "ready": true,
+                "healthy_volumes": volumes.len(),
+                "is_leader": state.raft.is_leader(),
+            })),
+        )
+    } else {
+        (
+            StatusCode::SERVICE_UNAVAILABLE,
+            axum::Json(json!({
+                "ready": false,
+                "healthy_volumes": volumes.len(),
+                "is_leader": state.raft.is_leader(),
+                "reason": if volumes.is_empty() { "No healthy volumes" } else { "No Raft leader" }
+            })),
+        )
+    }
+}
+
+/// Kubernetes liveness probe (v0.5.0)
+/// Returns 200 if the service is alive (not deadlocked/crashed)
+async fn health_live() -> impl IntoResponse {
+    // Simple liveness check - if we can respond, we're alive
+    (
+        StatusCode::OK,
+        axum::Json(json!({
+            "alive": true,
+            "version": env!("CARGO_PKG_VERSION"),
+            "timestamp": std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+        })),
+    )
+}
+
 /// Admin endpoint: returns minimal cluster status for dashboard
 async fn admin_status(State(state): State<CoordState>) -> impl IntoResponse {
     // Expose minimal info: role, is_leader, nb_peers, nb_volumes (if possible)
@@ -354,9 +456,18 @@ pub async fn metrics(State(state): State<CoordState>) -> impl IntoResponse {
         "follower"
     };
     out += &format!("minikv_raft_role {{}} \"{}\"\n", role);
-    // Advanced metrics: histograms, latency, alerts, etc. are now implemented or ready for extension.
+
+    // Enhanced metrics from global registry (v0.5.0)
+    out += &crate::common::METRICS.to_prometheus();
+
+    // S3 store stats (v0.5.0)
+    let s3_store = S3_STORE.lock().unwrap();
+    let s3_objects = s3_store.len();
+    let s3_objects_with_ttl = s3_store.values().filter(|(_, exp)| exp.is_some()).count();
+    out += &format!("minikv_s3_objects_total {{}} {}\n", s3_objects);
+    out += &format!("minikv_s3_objects_with_ttl {{}} {}\n", s3_objects_with_ttl);
+
     (axum::http::StatusCode::OK, out)
-    // no closing brace here
 }
 
 /// Health check endpoint for cluster status and Raft role.
@@ -370,7 +481,8 @@ async fn health(State(state): State<CoordState>) -> impl IntoResponse {
     axum::Json(json!({
         "status": "healthy",
         "role": role,
-        "is_leader": state.raft. is_leader(),
+        "is_leader": state.raft.is_leader(),
+        "version": env!("CARGO_PKG_VERSION"),
     }))
 }
 

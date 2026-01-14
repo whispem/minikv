@@ -33,7 +33,7 @@ cargo clippy --all-targets -- -D warnings
 
 ## Scope & Current Status
 
-All **core distributed features** for v0.4.0 are implemented and production-ready:
+All **core distributed features** for v0.5.0 are implemented and production-ready:
 
 - Multi-node Raft consensus (leader, replication, snapshot, recovery)
 - Two-Phase Commit (2PC) protocol for distributed atomic writes
@@ -44,8 +44,14 @@ All **core distributed features** for v0.4.0 are implemented and production-read
 - TLS encryption for HTTP & gRPC
 - Flexible config: file, env, CLI
 - Prometheus `/metrics`, distributed tracing
-- **Admin dashboard endpoint** (`/admin/status`) for cluster monitoring (**NEW in v0.4.0**)
-- **S3-compatible API** (PUT/GET, in-memory demo) (**NEW in v0.4.0**)
+- **Admin dashboard endpoint** (`/admin/status`) for cluster monitoring
+- **S3-compatible API** (PUT/GET, in-memory demo)
+- **TTL support** - Keys can expire automatically (**NEW in v0.5.0**)
+- **LZ4 compression** - Transparent compression for large values (**NEW in v0.5.0**)
+- **Rate limiting** - Token bucket with per-IP tracking (**NEW in v0.5.0**)
+- **Kubernetes health probes** - `/health/ready`, `/health/live` (**NEW in v0.5.0**)
+- **Enhanced metrics** - Histograms, per-endpoint stats (**NEW in v0.5.0**)
+- **Request tracing** - Structured logging with request IDs (**NEW in v0.5.0**)
 - Extensive automated tests & documentation
 
 **If something doesn’t work as documented, please open an issue!**
@@ -54,14 +60,17 @@ All **core distributed features** for v0.4.0 are implemented and production-read
 
 ## What’s Next? (Contributions welcome)
 
-The next big priorities (v0.5.0+) include:
+The next big priorities (v0.6.0+) include:
 
-- Persistent on-disk storage backends (e.g. RocksDB, Sled)
+- **Authentication & Multi-tenancy** - API keys, JWT, namespace isolation
+- **Encryption at rest** - Data encryption on disk
+- **RBAC** - Role-based access control
 - Cross-datacenter and multi-region replication
-- Durable S3-backed object store
-- Advanced authentication & access control
+- Change Data Capture (CDC) - Stream of modifications
+- Transactions - Multi-key atomic operations
+- Secondary indexes - Query by metadata/tags
+- Tiered storage - Hot/warm/cold data tiers
 - Real admin web UI/dashboard
-- Chaos & resilience tooling, perf (io_uring/zero-copy), enhanced deployment options
 
 > *Interested in one of these, or have new ideas? Open a discussion or issue!*
 

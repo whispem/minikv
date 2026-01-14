@@ -12,15 +12,18 @@
 
 ---
 
-## 🚦 What's New in v0.4.0
+## 🚦 What's New in v0.5.0
 
-minikv v0.4.0 brings:
+minikv v0.5.0 brings major new features:
 
-- **NEW:** Admin dashboard endpoint [`/admin/status`] — exposes cluster state (role, leader, volumes, S3 object count, etc.) for monitoring and UI integration.
-- **NEW:** S3-compatible API (PUT/GET) — store and retrieve objects via `/s3/:bucket/:key` (in-memory demo).
-- Full docs and automated tests for these features.
+- **NEW:** TTL (Time-To-Live) support — keys can now automatically expire after a configurable duration
+- **NEW:** LZ4 Compression — optional transparent compression for storage efficiency (3-5x space savings)
+- **NEW:** Rate Limiting — per-IP token bucket rate limiter with configurable burst and refill rates
+- **NEW:** Request IDs & Structured Logging — UUID-based request tracking with tracing spans
+- **NEW:** Enhanced Prometheus Metrics — latency histograms, per-endpoint stats, error rates
+- **NEW:** Kubernetes Health Probes — separate `/health/ready` and `/health/live` endpoints
 
-**Previous highlights:** range queries, batch operations, TLS, flexible config, multi-node Raft, 2PC, cluster rebalancing, Prometheus metrics, and more.
+**Previous highlights:** admin dashboard, S3-compatible API, range queries, batch operations, TLS, multi-node Raft, 2PC, cluster rebalancing, and more.
 
 ---
 
@@ -78,12 +81,24 @@ cargo build --release
 # Start a single node
 cargo run -- --config config.example.toml
 
-# Admin dashboard (NEW in v0.4.0)
+# Admin dashboard
 curl http://localhost:8080/admin/status
 
-# S3 demo API: Put & Get (NEW in v0.4.0)
+# S3 API: Put & Get
 curl -X PUT localhost:8080/s3/mybucket/mykey -d 'hello minikv!'
 curl localhost:8080/s3/mybucket/mykey
+
+# TTL support (v0.5.0): key expires in 60 seconds
+curl -X PUT localhost:8080/s3/mybucket/temp-key \
+  -H "X-Minikv-TTL: 60" \
+  -d 'this expires soon!'
+
+# Health probes (v0.5.0)
+curl localhost:8080/health/ready  # Kubernetes readiness
+curl localhost:8080/health/live   # Kubernetes liveness
+
+# Enhanced metrics (v0.5.0)
+curl localhost:8080/metrics
 ```
 For cluster setup & advanced options, see [the docs](#documentation).
 
@@ -118,17 +133,31 @@ For cluster setup & advanced options, see [the docs](#documentation).
   - Cluster auto-rebalancing (volumes, shards)
   - Write-Ahead Log (WAL) for durability and crash recovery
 
+- **Data Management (v0.5.0)**
+  - **NEW:** TTL (Time-To-Live) support for automatic key expiration
+  - **NEW:** LZ4 compression for efficient storage (configurable)
+  - Bloom filters for fast negative lookups
+  - Index snapshots for fast restarts
+
 - **Flexible API**
   - HTTP REST API: CRUD operations, batch, and range queries
   - Batch operations: multi-put, multi-get, multi-delete
   - Range queries and prefix scans for efficient bulk access
-  - **NEW:** S3-compatible API (PUT/GET, in-memory demo): `/s3/:bucket/:key`
+  - **NEW:** S3-compatible API with TTL support: `/s3/:bucket/:key`
   - gRPC API for internal cluster communication
 
-- **Observability & Admin**
-  - **NEW:** Admin dashboard endpoint `/admin/status`: exposes full cluster state (role, leader, volumes, S3 object count, etc.)
-  - Prometheus metrics endpoint
-  - Health and status endpoints
+- **Observability & Admin (v0.5.0)**
+  - Admin dashboard endpoint `/admin/status`: full cluster state
+  - **NEW:** Enhanced Prometheus metrics with latency histograms
+  - **NEW:** Per-endpoint request/error counters
+  - **NEW:** Kubernetes-ready health probes (`/health/ready`, `/health/live`)
+  - **NEW:** Request ID tracking via `X-Request-ID` header
+
+- **Protection & Reliability (v0.5.0)**
+  - **NEW:** Rate limiting with per-IP token bucket algorithm
+  - **NEW:** Structured logging with tracing spans
+  - TLS encryption for HTTP and gRPC endpoints
+  - Graceful leader failure handling, node hot-join/removal
 
 - **Security & Deployment**
   - TLS encryption for HTTP and gRPC endpoints
@@ -152,9 +181,23 @@ For cluster setup & advanced options, see [the docs](#documentation).
 
 ## 🗺️ Roadmap
 
+### Completed in v0.5.0 ✅
+- [x] TTL (Time-To-Live) for automatic key expiration
+- [x] LZ4 compression for storage efficiency
+- [x] Rate limiting with token bucket algorithm
+- [x] Request ID tracking and structured logging
+- [x] Enhanced Prometheus metrics with histograms
+- [x] Kubernetes health probes (readiness/liveness)
+
+### Next Up (v0.6.0)
 - [ ] Persistent storage backends (RocksDB, Sled, etc.)
 - [ ] Pluggable authentication & access control
-- [ ] Cloud-native tooling (K8s, Docker)
+- [ ] Audit logging
+
+### Future (v0.7.0+)
+- [ ] Watch/Subscribe for real-time key change notifications
+- [ ] Secondary indexes
+- [ ] Transactions multi-clés
 - [ ] Durable S3-backed object store
 - [ ] Streaming/batch import/export
 

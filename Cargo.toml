@@ -1,6 +1,6 @@
 [package]
 name = "minikv"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2021"
 authors = ["Em' <whispem@users.noreply.github.com>"]
 description = "A production-grade distributed KV store with Raft consensus in ~1,500 lines"
@@ -61,6 +61,11 @@ axum-server = { git = "https://github.com/programatik29/axum-server", branch = "
 tokio-rustls = "0.26.4"
 rustls = "0.23.35"
 rustls-pemfile = "2.2.0"
+# Compression (v0.5.0)
+lz4 = "1.28"
+# Distributed tracing (v0.5.0)
+tracing-opentelemetry = "0.27"
+opentelemetry = "0.27"
 
 [build-dependencies]
 tonic-build = "0.12"

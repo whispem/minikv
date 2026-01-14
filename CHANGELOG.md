@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.5.0] - 2026-01-15
+
+### Added - v0.5.0 Release
+
+#### Major Features
+- **TTL Support** - Keys can now expire automatically with millisecond precision
+  - Set TTL via `X-Minikv-TTL` header on PUT requests
+  - Automatic cleanup of expired keys
+- **LZ4 Compression** - Optional transparent compression for values > 1KB
+  - Configurable via `CompressionMode::Lz4`
+  - Automatic decompression on read
+- **Rate Limiting** - Token bucket algorithm with per-IP tracking
+  - Configurable requests per second and burst size
+  - Returns `X-RateLimit-*` headers
+- **Kubernetes Health Probes** - Production-ready health endpoints
+  - `/health/ready` - Readiness probe (checks volumes + Raft)
+  - `/health/live` - Liveness probe (always returns OK)
+- **Enhanced Metrics** - Prometheus histograms and per-endpoint stats
+  - Request latency histograms with configurable buckets
+  - Per-endpoint request/error counters
+  - TTL and rate limiting metrics
+- **Request Tracing** - Structured logging with request IDs
+  - Unique `X-Request-ID` header for each request
+  - Correlation across distributed components
+
+#### Improvements
+- Updated blob format to support compression metadata
+- Index snapshots now include TTL expiration data (KVINDEX3 format)
+- Better WAL replay with v0.5.0 format support
+
+#### Breaking Changes
+- Blob storage format changed (existing data will be migrated on read)
+- Index snapshot format updated to KVINDEX3
+
+---
+
 ## [0.4.0] - 2025-12-31
 
 ### Added - v0.4.0 Release

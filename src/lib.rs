@@ -7,6 +7,14 @@
 //! - gRPC for internal coordination, HTTP for public API
 //! - Bloom filters and index snapshots for performance
 //!
+//! ## New in v0.5.0
+//! - TTL (Time-To-Live) support for automatic key expiration
+//! - LZ4 compression for storage efficiency
+//! - Rate limiting with per-IP token bucket algorithm
+//! - Request ID tracking and structured logging
+//! - Enhanced Prometheus metrics with latency histograms
+//! - Kubernetes health probes (/health/ready, /health/live)
+//!
 //! ## Architecture
 
 #![allow(clippy::result_large_err)]

@@ -25,11 +25,11 @@ pub async fn stream_large_blob(_volume_id: &str, _key: &str) -> Result<()> {
         let n = match tokio::time::timeout(Duration::from_secs(5), reader.read(&mut buf)).await {
             Ok(Ok(n)) => n,
             Ok(Err(e)) => {
-                tracing::error!("stream_large_blob: erreur lecture: {}", e);
+                tracing::error!("stream_large_blob: read error: {}", e);
                 return Err(crate::Error::Internal(format!("stream error: {}", e)));
             }
             Err(_) => {
-                tracing::error!("stream_large_blob: timeout lecture blob {}", _key);
+                tracing::error!("stream_large_blob: timeout reading blob {}", _key);
                 return Err(crate::Error::Internal("stream timeout".to_string()));
             }
         };

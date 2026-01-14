@@ -3,6 +3,11 @@
 //! It uses a log-structured, append-only design for durability and performance.
 //! The in-memory HashMap index enables fast lookups, while a Bloom filter accelerates negative lookups.
 //! All operations are logged to a Write-Ahead Log (WAL) for crash recovery.
+//!
+//! Features in v0.5.0:
+//! - TTL (Time-To-Live) support for automatic key expiration
+//! - LZ4 compression for efficient storage
+//! - Background cleanup task for expired keys
 
 use crate::common::{blake3_hash, crc32, Result, WalSyncPolicy};
 use crate::volume::index::{BlobLocation, Index};
@@ -13,8 +18,12 @@ use std::io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
 const BLOB_MAGIC: [u8; 4] = [0x42, 0x4C, 0x4F, 0x42];
+/// Magic bytes for compressed blobs (v0.5.0)
+const BLOB_MAGIC_COMPRESSED: [u8; 4] = [0x42, 0x4C, 0x4F, 0x43]; // BLOC
 const SEGMENT_SIZE: u64 = 64 * 1024 * 1024;
 const MAX_SEGMENTS: u64 = 1000;
+/// Minimum size for compression (smaller blobs are stored uncompressed)
+const COMPRESSION_THRESHOLD: usize = 128;
 
 #[derive(Debug, Clone)]
 pub struct StoreStats {
@@ -23,6 +32,20 @@ pub struct StoreStats {
     pub active_segments: usize,
     pub index_size: usize,
     pub bloom_false_positives: u64,
+    /// Number of keys with TTL set
+    pub keys_with_ttl: usize,
+    /// Number of compressed blobs
+    pub compressed_blobs: u64,
+}
+
+/// Compression configuration
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CompressionMode {
+    /// No compression
+    #[default]
+    None,
+    /// LZ4 compression (fast)
+    Lz4,
 }
 
 /// BlobStore manages the log-structured storage for a volume.
@@ -43,6 +66,8 @@ pub struct BlobStore {
     current_offset: u64,
     /// WAL sync policy
     sync_policy: WalSyncPolicy,
+    /// Compression mode (v0.5.0)
+    compression: CompressionMode,
 }
 
 impl BlobStore {
@@ -106,18 +131,58 @@ impl BlobStore {
             current_segment,
             current_offset,
             sync_policy,
+            compression: CompressionMode::None,
         })
     }
 
-    pub fn put(&mut self, key: &str, value: &[u8]) -> Result<()> {
+    /// Open BlobStore with compression enabled (v0.5.0)
+    pub fn open_with_compression(
+        data_path: &Path,
+        wal_path: &Path,
+        sync_policy: WalSyncPolicy,
+        compression: CompressionMode,
+    ) -> Result<Self> {
+        let mut store = Self::open(data_path, wal_path, sync_policy)?;
+        store.compression = compression;
+        Ok(store)
+    }
+
+    /// Set compression mode at runtime
+    pub fn set_compression(&mut self, mode: CompressionMode) {
+        self.compression = mode;
+    }
+
+    /// Get current compression mode
+    pub fn compression_mode(&self) -> CompressionMode {
+        self.compression
+    }
+
+    /// Put a key-value pair with optional TTL (v0.5.0)
+    /// If ttl_ms is Some, the key will expire after the specified milliseconds.
+    pub fn put_with_ttl(&mut self, key: &str, value: &[u8], ttl_ms: Option<u64>) -> Result<()> {
         self.wal.append_put(key, value)?;
         let hash = blake3_hash(key.as_bytes());
         let hash_vec: Vec<u8> = hex::decode(&hash).unwrap_or_else(|_| vec![0u8; 32]);
         let hash_bytes: [u8; 32] = hash_vec.try_into().unwrap_or([0u8; 32]);
         self.bloom.set(&hash_bytes);
-        let location = self.write_blob(key, value)?;
+
+        let mut location = self.write_blob(key, value)?;
+
+        // Set expiration if TTL is provided
+        if let Some(ttl) = ttl_ms {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as u64;
+            location.expires_at = Some(now + ttl);
+        }
+
         self.index.insert(key.to_string(), location);
         Ok(())
+    }
+
+    pub fn put(&mut self, key: &str, value: &[u8]) -> Result<()> {
+        self.put_with_ttl(key, value, None)
     }
 
     pub fn get(&self, key: &str) -> Result<Option<Vec<u8>>> {
@@ -129,7 +194,8 @@ impl BlobStore {
             return Ok(None);
         }
 
-        match self.index.get(key) {
+        // Use get_if_valid to respect TTL (v0.5.0)
+        match self.index.get_if_valid(key) {
             Some(loc) => self.read_blob(loc),
             None => Ok(None),
         }
@@ -151,10 +217,10 @@ impl BlobStore {
 
         for (key, old_location) in self.index.iter() {
             if let Ok(Some(value)) = self.read_blob(old_location) {
-                let location =
+                let (location, bytes_written) =
                     self.write_blob_to_segment(&temp_path, new_segment, new_offset, key, &value)?;
-                new_index.insert(key.clone(), location.clone());
-                new_offset = location.offset + location.size + 16;
+                new_index.insert(key.clone(), location);
+                new_offset += bytes_written;
                 if new_offset > SEGMENT_SIZE {
                     new_segment += 1;
                     new_offset = 0;
@@ -191,14 +257,45 @@ impl BlobStore {
         Ok(())
     }
 
+    /// Clean up expired keys (v0.5.0)
+    /// Returns the number of keys removed.
+    pub fn cleanup_expired(&mut self) -> usize {
+        self.index.cleanup_expired()
+    }
+
+    /// Get TTL remaining for a key in milliseconds (v0.5.0)
+    /// Returns None if key doesn't exist or has no TTL.
+    pub fn get_ttl(&self, key: &str) -> Option<u64> {
+        if let Some(loc) = self.index.get(key) {
+            if let Some(expires_at) = loc.expires_at {
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_millis() as u64;
+                if now < expires_at {
+                    return Some(expires_at - now);
+                }
+            }
+        }
+        None
+    }
+
+    /// Check if a key exists (respecting TTL) (v0.5.0)
+    pub fn exists(&self, key: &str) -> bool {
+        self.index.get_if_valid(key).is_some()
+    }
+
     pub fn stats(&self) -> StoreStats {
         let total_bytes: u64 = self.index.iter().map(|(_, loc)| loc.size).sum();
+        let keys_with_ttl = self.index.keys_with_ttl().len();
         StoreStats {
             total_keys: self.index.len(),
             total_bytes,
             active_segments: (self.current_segment + 1) as usize,
             index_size: self.index.len(),
             bloom_false_positives: 0,
+            keys_with_ttl,
+            compressed_blobs: 0, // TODO: track compressed blobs
         }
     }
 
@@ -211,18 +308,19 @@ impl BlobStore {
             }
         }
 
-        let location = self.write_blob_to_segment(
+        let (location, bytes_written) = self.write_blob_to_segment(
             &self.data_path,
             self.current_segment,
             self.current_offset,
             key,
             value,
         )?;
-        // Header size: MAGIC(4) + KEY_LEN(4) + VAL_LEN(8) + KEY + VALUE + CHECKSUM(4) = 20 + key.len() + value.len()
-        self.current_offset = location.offset + 20 + key.len() as u64 + location.size;
+        self.current_offset = location.offset + bytes_written;
         Ok(location)
     }
 
+    /// Write a blob to a segment file.
+    /// Returns (BlobLocation, total_bytes_written)
     fn write_blob_to_segment(
         &self,
         base_path: &Path,
@@ -230,7 +328,7 @@ impl BlobStore {
         offset: u64,
         key: &str,
         value: &[u8],
-    ) -> Result<BlobLocation> {
+    ) -> Result<(BlobLocation, u64)> {
         let segment_dir = base_path
             .join(format!("{:02}", segment % 100))
             .join(format!("{:02}", segment / 100));
@@ -245,17 +343,39 @@ impl BlobStore {
         file.seek(SeekFrom::Start(offset))?;
         let mut writer = BufWriter::new(&file);
 
-        writer.write_all(&BLOB_MAGIC)?;
+        // Compress value if compression is enabled and size is above threshold (v0.5.0)
+        let (write_value, is_compressed) =
+            if self.compression == CompressionMode::Lz4 && value.len() >= COMPRESSION_THRESHOLD {
+                match lz4::block::compress(value, None, true) {
+                    Ok(compressed) if compressed.len() < value.len() => (compressed, true),
+                    _ => (value.to_vec(), false), // Fallback to uncompressed if compression doesn't help
+                }
+            } else {
+                (value.to_vec(), false)
+            };
+
+        // Use different magic for compressed blobs
+        let magic = if is_compressed {
+            BLOB_MAGIC_COMPRESSED
+        } else {
+            BLOB_MAGIC
+        };
+        writer.write_all(&magic)?;
+
+        // Store original size for decompression
         writer.write_all(&(key.len() as u32).to_le_bytes())?;
+        writer.write_all(&(write_value.len() as u64).to_le_bytes())?;
+        // Store original size for compressed blobs
         writer.write_all(&(value.len() as u64).to_le_bytes())?;
         writer.write_all(key.as_bytes())?;
-        writer.write_all(value)?;
+        writer.write_all(&write_value)?;
 
         let mut checksum_data = Vec::new();
         checksum_data.extend_from_slice(&(key.len() as u32).to_le_bytes());
+        checksum_data.extend_from_slice(&(write_value.len() as u64).to_le_bytes());
         checksum_data.extend_from_slice(&(value.len() as u64).to_le_bytes());
         checksum_data.extend_from_slice(key.as_bytes());
-        checksum_data.extend_from_slice(value);
+        checksum_data.extend_from_slice(&write_value);
         let checksum = crc32(&checksum_data);
         writer.write_all(&checksum.to_le_bytes())?;
         writer.flush()?;
@@ -264,13 +384,21 @@ impl BlobStore {
             file.sync_all()?;
         }
 
+        // Calculate total bytes written:
+        // MAGIC(4) + KEY_LEN(4) + VAL_LEN(8) + ORIG_LEN(8) + KEY + VALUE + CHECKSUM(4)
+        let bytes_written = 4 + 4 + 8 + 8 + key.len() as u64 + write_value.len() as u64 + 4;
+
         let blake3 = blake3_hash(value);
-        Ok(BlobLocation {
-            shard: segment,
-            offset,
-            size: value.len() as u64,
-            blake3,
-        })
+        Ok((
+            BlobLocation {
+                shard: segment,
+                offset,
+                size: value.len() as u64,
+                blake3,
+                expires_at: None, // TTL is set by put_with_ttl, not here
+            },
+            bytes_written,
+        ))
     }
 
     fn read_blob(&self, location: &BlobLocation) -> Result<Option<Vec<u8>>> {
@@ -290,7 +418,10 @@ impl BlobStore {
 
         let mut magic = [0u8; 4];
         reader.read_exact(&mut magic)?;
-        if magic != BLOB_MAGIC {
+
+        // Check for both compressed and uncompressed magic (v0.5.0)
+        let is_compressed = magic == BLOB_MAGIC_COMPRESSED;
+        if magic != BLOB_MAGIC && !is_compressed {
             return Err(crate::Error::Corrupted("Invalid blob magic".into()));
         }
 
@@ -301,6 +432,11 @@ impl BlobStore {
         let mut val_len_bytes = [0u8; 8];
         reader.read_exact(&mut val_len_bytes)?;
         let val_len = u64::from_le_bytes(val_len_bytes) as usize;
+
+        // Read original size (v0.5.0)
+        let mut orig_len_bytes = [0u8; 8];
+        reader.read_exact(&mut orig_len_bytes)?;
+        let orig_len = u64::from_le_bytes(orig_len_bytes) as usize;
 
         let mut key_bytes = vec![0u8; key_len];
         reader.read_exact(&mut key_bytes)?;
@@ -314,6 +450,7 @@ impl BlobStore {
         let mut checksum_data = Vec::new();
         checksum_data.extend_from_slice(&key_len_bytes);
         checksum_data.extend_from_slice(&val_len_bytes);
+        checksum_data.extend_from_slice(&orig_len_bytes);
         checksum_data.extend_from_slice(&key_bytes);
         checksum_data.extend_from_slice(&value);
         let computed_checksum = crc32(&checksum_data);
@@ -325,7 +462,15 @@ impl BlobStore {
             });
         }
 
-        Ok(Some(value))
+        // Decompress if needed (v0.5.0)
+        if is_compressed {
+            match lz4::block::decompress(&value, Some(orig_len as i32)) {
+                Ok(decompressed) => Ok(Some(decompressed)),
+                Err(_) => Err(crate::Error::Corrupted("LZ4 decompression failed".into())),
+            }
+        } else {
+            Ok(Some(value))
+        }
     }
 
     fn rebuild_index_from_segments(
@@ -376,7 +521,9 @@ impl BlobStore {
                 Err(e) => return Err(e.into()),
             }
 
-            if magic != BLOB_MAGIC {
+            // Support both compressed and uncompressed magic (v0.5.0)
+            let is_compressed = magic == BLOB_MAGIC_COMPRESSED;
+            if magic != BLOB_MAGIC && !is_compressed {
                 break;
             }
 
@@ -387,6 +534,11 @@ impl BlobStore {
             let mut val_len_bytes = [0u8; 8];
             reader.read_exact(&mut val_len_bytes)?;
             let val_len = u64::from_le_bytes(val_len_bytes) as usize;
+
+            // Read original size (v0.5.0)
+            let mut orig_len_bytes = [0u8; 8];
+            reader.read_exact(&mut orig_len_bytes)?;
+            let orig_len = u64::from_le_bytes(orig_len_bytes);
 
             let mut key_bytes = vec![0u8; key_len];
             reader.read_exact(&mut key_bytes)?;
@@ -406,12 +558,14 @@ impl BlobStore {
                 BlobLocation {
                     shard: segment,
                     offset,
-                    size: val_len as u64,
+                    size: orig_len, // Use original size, not compressed size
                     blake3: hash,
+                    expires_at: None, // Legacy entries don't have TTL
                 },
             );
 
-            offset += 4 + 4 + 8 + key_len as u64 + val_len as u64 + 4;
+            // Updated offset calculation: MAGIC(4) + KEY_LEN(4) + VAL_LEN(8) + ORIG_LEN(8) + KEY + VALUE + CHECKSUM(4)
+            offset += 4 + 4 + 8 + 8 + key_len as u64 + val_len as u64 + 4;
         }
         Ok(())
     }
