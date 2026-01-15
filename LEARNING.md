@@ -96,7 +96,7 @@ After hearing:
 
 ---
 
-## About minikv: What It Can Do (as of v0.4.0)
+## About minikv: What It Can Do (as of v0.6.0)
 
 **Distributed Core:**
 - Multi-node Raft consensus (leader election, log replication, snapshots, recovery, partition detection)
@@ -109,8 +109,9 @@ After hearing:
 - Batch operations API (multi-put/get/delete)
 - TLS encryption for HTTP and gRPC (production-ready security)
 - Flexible configuration: file, env, CLI override
-- **Admin dashboard endpoint** (`/admin/status`) for cluster monitoring (**NEW in v0.4.0**)
-- **S3-compatible API** (PUT/GET, in-memory demo) (**NEW in v0.4.0**)
+- **Admin dashboard endpoint** (`/admin/status`) for cluster monitoring
+- **S3-compatible API** (PUT/GET, in-memory and persistent backends)
+- **Watch/Subscribe system** (WebSocket & SSE endpoints) for real-time key change notifications
 
 **Storage Engine:**
 - Segmented, append-only log structure
@@ -119,6 +120,16 @@ After hearing:
 - Instant index snapshots (5ms restarts)
 - CRC32 checksums on every record
 - Automatic background compaction and space reclamation
+- **Persistent storage backends:** RocksDB, Sled, in-memory (configurable)
+
+**Security & Multi-Tenancy:**
+- API Key authentication (Argon2)
+- JWT token support
+- Role-Based Access Control (Admin/ReadWrite/ReadOnly)
+- Multi-tenant data isolation
+- AES-256-GCM encryption at rest
+- Per-tenant quotas (storage, objects, rate limits)
+- Audit logging for all admin and data modification events
 
 **Durability:**
 - Write-Ahead Log (WAL) for safety
@@ -126,9 +137,10 @@ After hearing:
 - Fast crash recovery via WAL replay
 
 **APIs:**
-- gRPC for internal communication (coordinator ↔ volume)
+- gRPC for internal communication (coordinator <-> volume)
 - HTTP REST API for clients
 - CLI for cluster ops (verify, repair, compact, rebalance, batch, range)
+- WebSocket & SSE endpoints for real-time notifications
 
 **Infrastructure:**
 - Docker Compose setup for dev/test
@@ -140,6 +152,17 @@ After hearing:
 **Testing & Internationalization:**
 - Integration, stress, and recovery tests
 - All code/scripts/docs in English
+
+---
+
+## Milestones & Accomplishments
+
+- Learned the fundamentals of Rust: ownership, lifetimes, async/await
+- Built a distributed storage engine with Raft, WAL, and 2PC
+- Added API Key/JWT authentication, RBAC, quotas, and audit logging
+- **Implemented a real-time notification system (watch/subscribe via WebSocket & SSE) for key changes**
+- Integrated persistent storage backends (RocksDB, Sled)
+- Made the project production-ready with tests, CI, and comprehensive documentation
 
 ---
 

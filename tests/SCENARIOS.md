@@ -108,4 +108,69 @@ This document describes manual test scenarios to validate the robustness, resili
 
 ---
 
+## 7. Audit Logging
+
+**Context:** All admin and sensitive actions are logged for compliance and traceability.
+
+**Steps:**
+1. Start the cluster with audit logging enabled (default).
+2. Perform admin actions (create/revoke/delete API keys, change quotas, etc.).
+3. Perform S3/data operations (PUT, GET, DELETE).
+4. Download or view the audit log file and stdout output.
+
+**Success Criteria:**
+- All admin and data modification actions are logged with correct event type, actor, and details.
+- Audit log file and stdout output are consistent and complete.
+
+---
+
+## 8. Persistent Storage Backend
+
+**Context:** Data is stored in RocksDB or Sled instead of in-memory.
+
+**Steps:**
+1. Configure the cluster to use RocksDB or Sled backend in config.toml.
+2. Start the cluster and insert data via S3 API.
+3. Stop and restart the cluster.
+4. Verify data persists across restarts.
+
+**Success Criteria:**
+- Data is durable and survives process restarts.
+- No data loss or corruption.
+
+---
+
+## 9. Watch/Subscribe System
+
+**Context:** Clients can subscribe to key or prefix changes and receive real-time notifications.
+
+**Steps:**
+1. Start the cluster with watch/subscribe enabled.
+2. Open a WebSocket or SSE connection to `/admin/subscribe` or similar endpoint.
+3. Perform key changes (PUT, DELETE) on subscribed keys/prefixes.
+4. Observe notifications received by the client.
+
+**Success Criteria:**
+- Clients receive timely and accurate notifications for all relevant key changes.
+- No missed or duplicate events.
+
+---
+
+## 10. Real-time Watch/Subscribe Notifications
+
+**Context:** Clients subscribe to key change events via WebSocket or SSE endpoints.
+
+**Steps:**
+1. Start the cluster (coordinator + volumes).
+2. Open a WebSocket connection to `/watch/ws` or an SSE connection to `/watch/sse`.
+3. Perform PUT, DELETE, and REVOKE operations via the API.
+4. Observe the events received by the client (should include event type, key, tenant, timestamp).
+
+**Success Criteria:**
+- Each key change triggers a real-time event to all subscribers.
+- Events are correctly formatted and delivered via both WebSocket and SSE.
+- No missed or duplicate events for single operations.
+
+---
+
 > These scenarios should be executed manually, with result logging and metrics capture for each step. They guarantee professional-grade validation for minikv v0.4.0.

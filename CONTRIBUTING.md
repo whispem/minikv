@@ -28,12 +28,17 @@ cargo clippy --all-targets -- -D warnings
 - **Feature request / UX / roadmap discussion**: Open an issue or new PR — all proposals are welcome.
 - **Code**: Fork, branch, commit, PR! See workflow below.
 - **Docs**: PRs on typos, missing info, or improved clarity always welcome.
+- **Areas especially welcome:**
+  - Audit logging improvements (event types, log sinks, compliance)
+  - Persistent storage backends (RocksDB/Sled features, migration, config)
+  - Watch/subscribe system (WebSocket/SSE, event filtering, scaling, production-ready)
+  - Tests and documentation for all new features
 
 ---
 
 ## Scope & Current Status
 
-All **core distributed features** for v0.5.0 are implemented and production-ready:
+All **core distributed features** for v0.6.0 are implemented and production-ready:
 
 - Multi-node Raft consensus (leader, replication, snapshot, recovery)
 - Two-Phase Commit (2PC) protocol for distributed atomic writes
@@ -46,12 +51,21 @@ All **core distributed features** for v0.5.0 are implemented and production-read
 - Prometheus `/metrics`, distributed tracing
 - **Admin dashboard endpoint** (`/admin/status`) for cluster monitoring
 - **S3-compatible API** (PUT/GET, in-memory demo)
-- **TTL support** - Keys can expire automatically (**NEW in v0.5.0**)
-- **LZ4 compression** - Transparent compression for large values (**NEW in v0.5.0**)
-- **Rate limiting** - Token bucket with per-IP tracking (**NEW in v0.5.0**)
-- **Kubernetes health probes** - `/health/ready`, `/health/live` (**NEW in v0.5.0**)
-- **Enhanced metrics** - Histograms, per-endpoint stats (**NEW in v0.5.0**)
-- **Request tracing** - Structured logging with request IDs (**NEW in v0.5.0**)
+- **TTL support** - Keys can expire automatically (v0.5.0)
+- **LZ4 compression** - Transparent compression for large values (v0.5.0)
+- **Rate limiting** - Token bucket with per-IP tracking (v0.5.0)
+- **Kubernetes health probes** - `/health/ready`, `/health/live` (v0.5.0)
+- **Enhanced metrics** - Histograms, per-endpoint stats (v0.5.0)
+- **Request tracing** - Structured logging with request IDs (v0.5.0)
+- **API Key Authentication** - Secure access with Argon2 hashing (**NEW in v0.6.0**)
+- **JWT Token Support** - Stateless auth with configurable expiration (**NEW in v0.6.0**)
+- **RBAC** - Role-based access control (Admin/ReadWrite/ReadOnly) (**NEW in v0.6.0**)
+- **Multi-tenancy** - Tenant isolation and data tagging (**NEW in v0.6.0**)
+- **Encryption at Rest** - AES-256-GCM with HKDF key derivation (**NEW in v0.6.0**)
+- **Tenant Quotas** - Storage, object count, and rate limits per tenant (**NEW in v0.6.0**)
+- **Audit Logging** - Structured audit logs for admin and sensitive actions (**NEW in v0.6.0**)
+- **Persistent Storage Backends** - RocksDB, Sled, in-memory (configurable) (**NEW in v0.6.0**)
+- **Watch/Subscribe System** - Real-time key change notifications (WebSocket/SSE, preview) (**NEW in v0.6.0**)
 - Extensive automated tests & documentation
 
 **If something doesn’t work as documented, please open an issue!**
@@ -60,17 +74,16 @@ All **core distributed features** for v0.5.0 are implemented and production-read
 
 ## What’s Next? (Contributions welcome)
 
-The next big priorities (v0.6.0+) include:
+The next big priorities (v0.7.0+) include:
 
-- **Authentication & Multi-tenancy** - API keys, JWT, namespace isolation
-- **Encryption at rest** - Data encryption on disk
-- **RBAC** - Role-based access control
-- Cross-datacenter and multi-region replication
-- Change Data Capture (CDC) - Stream of modifications
-- Transactions - Multi-key atomic operations
-- Secondary indexes - Query by metadata/tags
-- Tiered storage - Hot/warm/cold data tiers
-- Real admin web UI/dashboard
+- **Cross-datacenter replication** - Multi-region support with conflict resolution
+- **Change Data Capture (CDC)** - Stream of modifications for event-driven systems
+- **Transactions** - Multi-key atomic operations with ACID guarantees
+- **Secondary indexes** - Query by metadata/tags for flexible data access
+- **Tiered storage** - Hot/warm/cold data tiers for cost optimization
+- **Admin Web UI** - Real-time dashboard with cluster visualization
+- **Backup & Restore** - Point-in-time recovery and scheduled backups
+- **Plugin system** - Extensible hooks for custom logic
 
 > *Interested in one of these, or have new ideas? Open a discussion or issue!*
 

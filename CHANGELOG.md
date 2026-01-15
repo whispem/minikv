@@ -7,6 +7,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.0] - 2025-01-20
+
+### Added - v0.6.0 Release
+
+#### Major Features - Security, Multi-tenancy & Observability
+- **API Key Authentication** - Secure access control with API keys
+  - Generate and manage API keys via admin endpoints
+  - Keys are securely hashed using Argon2id
+  - Support for key expiration and revocation
+  - Headers: `Authorization: Bearer <api_key>` or `X-API-Key: <key>`
+- **JWT Token Support** - Stateless authentication tokens
+  - Generate JWT tokens from valid API keys
+  - Configurable token expiration (default: 24 hours)
+  - HMAC-SHA256 signature verification
+- **Role-Based Access Control (RBAC)** - Fine-grained permissions
+  - Three role levels: Admin, ReadWrite, ReadOnly
+  - Middleware enforcement on all protected routes
+  - Role-based endpoint restrictions
+- **Multi-tenancy** - Tenant isolation for data
+  - Tenant identifier attached to each API key
+  - S3 objects tagged with tenant ownership
+  - Tenant extraction from authenticated requests
+- **Encryption at Rest** - AES-256-GCM data encryption
+  - HKDF-SHA256 key derivation from master key
+  - Per-object random nonces for security
+  - Separate keys for data and WAL encryption
+  - Transparent encryption/decryption with backward compatibility
+- **Tenant Quotas** - Resource limits per tenant
+  - Storage limits (bytes)
+  - Object count limits
+  - Request rate limiting per tenant
+  - Prometheus metrics for quota usage
+- **Audit Logging** - Structured audit logs for all admin and sensitive actions (file + stdout)
+- **Persistent Storage Backends** - Pluggable storage: in-memory, RocksDB, Sled (configurable via config.toml)
+- **Watch/Subscribe System** - Real-time key change notifications (WebSocket & SSE endpoints, production-ready)
+  - Subscribe to key changes via `/watch/sse` (SSE) or `/watch/ws` (WebSocket)
+  - Events: PUT, DELETE, REVOKE (with key, tenant, timestamp)
+  - Integrated with all S3/data and admin modification endpoints
+
+#### Admin API Endpoints
+- `POST /admin/keys` - Create new API key
+- `GET /admin/keys` - List all API keys
+- `GET /admin/keys/:id` - Get specific API key details
+- `POST /admin/keys/:id/revoke` - Revoke an API key
+- `DELETE /admin/keys/:id` - Delete an API key
+- `GET /admin/audit` - Download or stream audit logs (NEW)
+- `GET /admin/subscribe` - Subscribe to key change events (NEW, preview)
+
+#### Security Improvements
+- Constant-time password verification with Argon2
+- Secure key generation using cryptographic RNG
+- Authentication middleware for route protection
+- Request validation and tenant context propagation
+- Audit log hooks in all admin and data modification endpoints
+
+#### Storage Improvements
+- Pluggable backend: select in-memory, RocksDB, or Sled via config
+- S3/data endpoints refactored to use trait abstraction
+- Persistent storage for all S3/data paths when enabled
+
+#### Observability
+- Audit log file and stdout output
+- Prometheus metrics for audit, quota, and storage backend
+- Watch/subscribe system for real-time notifications (preview)
+
+#### Breaking Changes
+- S3 store entries now include tenant field
+- Authorization required for protected endpoints (when auth enabled)
+- Storage backend must be selected in config (default: in-memory)
+
+---
+
 ## [0.5.0] - 2026-01-15
 
 ### Added - v0.5.0 Release
@@ -152,5 +224,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Coordinator commands: `serve`, `compact`, `rebalance`
 - Volume commands: `serve`, `compact`
 - CLI: verify, repair, batch, range
-
----
