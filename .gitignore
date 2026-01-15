@@ -33,3 +33,9 @@ vol-s3extra-wal-*/
 coord-s3extra-*.log
 vol-s3extra-*.log
 config-*.toml
+
+# Ignore all log files
+*.log
+
+# Ignore macOS system files
+.DS_Store
