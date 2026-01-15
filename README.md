@@ -63,8 +63,8 @@ minikv v0.5.0 brings major new features:
 
 Language composition:
 
-- **Rust** (~75%) — main logic, performance, and type safety
-- **Shell** (~21%) — orchestration and automation scripts
+- **Rust** (~82%) — main logic, performance, and type safety
+- **Shell** (~14%) — orchestration and automation scripts
 - **JavaScript** (~2%) — benchmarks and tools
 - **Makefile** (~2%) — build flows
 
