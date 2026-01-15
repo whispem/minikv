@@ -1,6 +1,6 @@
 [package]
 name = "minikv"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2021"
 authors = ["Em' <whispem@users.noreply.github.com>"]
 description = "A production-grade distributed KV store with Raft consensus in ~1,500 lines"
@@ -11,13 +11,15 @@ categories = ["database-implementations", "network-programming"]
 rust-version = "1.81"
 
 [dependencies]
+# Persistent storage backends
+sled = { version = "0.34", optional = true }
 # Async runtime
 tokio = { version = "1", features = ["rt-multi-thread", "net", "io-util", "sync", "macros", "fs", "signal", "time"] }
 # gRPC
 tonic = { version = "0.12", features = ["tls"] }
 prost = "0.13"
 # HTTP server (public API)
-axum = "0.7"
+axum = { version = "0.7", features = ["ws"] }
 tower = { version = "0.5", features = ["util", "timeout"] }
 tower-http = { version = "0.5", features = ["limit", "trace"] }
 # Metadata store
@@ -44,7 +46,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # CLI
 clap = { version = "4", features = ["derive"] }
 # Time utilities
-chrono = "0.4"
+chrono = { version = "0.4", features = ["serde"] }
 # URL encoding
 percent-encoding = "2.3"
 # Byte utilities
@@ -66,6 +68,15 @@ lz4 = "1.28"
 # Distributed tracing (v0.5.0)
 tracing-opentelemetry = "0.27"
 opentelemetry = "0.27"
+# Authentication & Security (v0.6.0)
+jsonwebtoken = "9"
+argon2 = "0.5"
+base64 = "0.22"
+# Encryption at rest (v0.6.0)
+aes-gcm = "0.10"
+hkdf = "0.12"
+futures-util = "0.3"
+async-stream = "0.3"
 
 [build-dependencies]
 tonic-build = "0.12"
@@ -77,6 +88,8 @@ tokio-test = "0.4"
 
 [features]
 default = []
+rocksdb = []
+sled-backend = ["sled"]
 heavy-tests = []
 
 [[bin]]

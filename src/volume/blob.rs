@@ -295,7 +295,7 @@ impl BlobStore {
             index_size: self.index.len(),
             bloom_false_positives: 0,
             keys_with_ttl,
-            compressed_blobs: 0, // TODO: track compressed blobs
+            compressed_blobs: 0, // TODO: track number of compressed blobs
         }
     }
 

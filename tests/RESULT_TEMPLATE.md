@@ -67,4 +67,26 @@ Use this template to record the results of each manual test scenario. Complete e
 
 ---
 
+## Additional Checks for v0.6.0+
+- **Audit Logging:**
+  - [ ] All admin and sensitive actions are logged
+  - [ ] Log file and stdout output are consistent
+- **Persistent Storage Backend:**
+  - [ ] Data persists across restarts (RocksDB/Sled)
+  - [ ] No data loss or corruption
+- **Watch/Subscribe System:**
+  - [ ] Real-time notifications received for key changes
+  - [ ] No missed or duplicate events
+
+---
+
+## Real-time Notification Verification
+- **WebSocket/SSE endpoint tested:**
+- **Events received:**
+- **Event content (sample):**
+- [ ] All expected events received
+- [ ] No duplicate or missing events
+
+---
+
 > This report should be archived for each scenario execution to ensure quality and compliance of the minikv cluster.

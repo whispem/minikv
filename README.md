@@ -12,18 +12,18 @@
 
 ---
 
-## 🚦 What's New in v0.5.0
+## 🚦 What's New in v0.6.0
 
-minikv v0.5.0 brings major new features:
+minikv v0.6.0 brings enterprise-grade security and multi-tenancy:
 
-- **NEW:** TTL (Time-To-Live) support — keys can now automatically expire after a configurable duration
-- **NEW:** LZ4 Compression — optional transparent compression for storage efficiency (3-5x space savings)
-- **NEW:** Rate Limiting — per-IP token bucket rate limiter with configurable burst and refill rates
-- **NEW:** Request IDs & Structured Logging — UUID-based request tracking with tracing spans
-- **NEW:** Enhanced Prometheus Metrics — latency histograms, per-endpoint stats, error rates
-- **NEW:** Kubernetes Health Probes — separate `/health/ready` and `/health/live` endpoints
+- **NEW:** API Key Authentication — secure access with Argon2-hashed keys
+- **NEW:** JWT Token Support — stateless auth with configurable expiration
+- **NEW:** Role-Based Access Control (RBAC) — Admin, ReadWrite, ReadOnly roles
+- **NEW:** Multi-tenancy — tenant isolation with per-tenant data tagging
+- **NEW:** Encryption at Rest — AES-256-GCM with HKDF key derivation
+- **NEW:** Tenant Quotas — storage, object count, and rate limits per tenant
 
-**Previous highlights:** admin dashboard, S3-compatible API, range queries, batch operations, TLS, multi-node Raft, 2PC, cluster rebalancing, and more.
+**Previous highlights (v0.5.0):** TTL support, LZ4 compression, rate limiting, request tracing, enhanced metrics, Kubernetes health probes.
 
 ---
 
@@ -79,25 +79,37 @@ cd minikv
 cargo build --release
 
 # Start a single node
+curl localhost:8080/s3/mybucket/mykey
+curl localhost:8080/health/ready  # Kubernetes readiness
+curl localhost:8080/health/live   # Kubernetes liveness
+curl localhost:8080/metrics
 cargo run -- --config config.example.toml
 
 # Admin dashboard
 curl http://localhost:8080/admin/status
 
-# S3 API: Put & Get
-curl -X PUT localhost:8080/s3/mybucket/mykey -d 'hello minikv!'
-curl localhost:8080/s3/mybucket/mykey
+# Create an API key (admin)
+curl -X POST http://localhost:8080/admin/keys \
+  -H "Authorization: Bearer <admin_api_key>" \
+  -d '{"role":"ReadWrite","tenant_id":"acme"}'
 
-# TTL support (v0.5.0): key expires in 60 seconds
+# S3 API: Put & Get (with API key)
+curl -X PUT localhost:8080/s3/mybucket/mykey \
+  -H "Authorization: Bearer <api_key>" \
+  -d 'hello minikv!'
+curl -H "Authorization: Bearer <api_key>" localhost:8080/s3/mybucket/mykey
+
+# TTL support: key expires in 60 seconds
 curl -X PUT localhost:8080/s3/mybucket/temp-key \
+  -H "Authorization: Bearer <api_key>" \
   -H "X-Minikv-TTL: 60" \
   -d 'this expires soon!'
 
-# Health probes (v0.5.0)
+# Health probes
 curl localhost:8080/health/ready  # Kubernetes readiness
 curl localhost:8080/health/live   # Kubernetes liveness
 
-# Enhanced metrics (v0.5.0)
+# Enhanced metrics
 curl localhost:8080/metrics
 ```
 For cluster setup & advanced options, see [the docs](#documentation).
@@ -133,11 +145,16 @@ For cluster setup & advanced options, see [the docs](#documentation).
   - Cluster auto-rebalancing (volumes, shards)
   - Write-Ahead Log (WAL) for durability and crash recovery
 
-- **Data Management (v0.5.0)**
-  - **NEW:** TTL (Time-To-Live) support for automatic key expiration
-  - **NEW:** LZ4 compression for efficient storage (configurable)
+
+- **Data Management**
+  - TTL (Time-To-Live) support for automatic key expiration
+  - LZ4 compression for efficient storage (configurable)
   - Bloom filters for fast negative lookups
   - Index snapshots for fast restarts
+  - **Pluggable storage backends:** In-memory, RocksDB, Sled (configurable, persistent)
+  - **Persistent storage backends:** In-memory, RocksDB, Sled (configurable, production-ready)
+  - **Real-time notifications:** Watch/Subscribe system (WebSocket & SSE endpoints) for key changes (PUT/DELETE/REVOKE)
+
 
 - **Flexible API**
   - HTTP REST API: CRUD operations, batch, and range queries
@@ -146,20 +163,31 @@ For cluster setup & advanced options, see [the docs](#documentation).
   - **NEW:** S3-compatible API with TTL support: `/s3/:bucket/:key`
   - gRPC API for internal cluster communication
 
-- **Observability & Admin (v0.5.0)**
-  - Admin dashboard endpoint `/admin/status`: full cluster state
-  - **NEW:** Enhanced Prometheus metrics with latency histograms
-  - **NEW:** Per-endpoint request/error counters
-  - **NEW:** Kubernetes-ready health probes (`/health/ready`, `/health/live`)
-  - **NEW:** Request ID tracking via `X-Request-ID` header
 
-- **Protection & Reliability (v0.5.0)**
-  - **NEW:** Rate limiting with per-IP token bucket algorithm
-  - **NEW:** Structured logging with tracing spans
+- **Observability & Admin**
+  - Admin dashboard endpoint `/admin/status`: full cluster state
+  - Enhanced Prometheus metrics with latency histograms
+  - Per-endpoint request/error counters
+  - Kubernetes-ready health probes (`/health/ready`, `/health/live`)
+  - Request ID tracking via `X-Request-ID` header
+  - **Structured audit logging:** All admin and sensitive actions (file + stdout)
+  - **Watch/Subscribe endpoints:** `/watch/sse` (SSE) and `/watch/ws` (WebSocket) for real-time key change events
+
+
+- **Protection & Reliability**
+  - Rate limiting with per-IP token bucket algorithm
+  - Structured logging with tracing spans
   - TLS encryption for HTTP and gRPC endpoints
   - Graceful leader failure handling, node hot-join/removal
 
-- **Security & Deployment**
+- **Security & Multi-tenancy (v0.6.0)**
+  - **NEW:** API Key authentication with Argon2 hashing
+  - **NEW:** JWT token support for stateless auth
+  - **NEW:** Role-Based Access Control (Admin/ReadWrite/ReadOnly)
+  - **NEW:** Multi-tenant data isolation
+  - **NEW:** AES-256-GCM encryption at rest
+  - **NEW:** Per-tenant quotas (storage, objects, rate limits)
+  - **NEW:** Audit logging for all admin and data modification events
   - TLS encryption for HTTP and gRPC endpoints
   - Configurable via file, ENV, or CLI
   - Stateless binary (single static executable)
@@ -168,7 +196,7 @@ For cluster setup & advanced options, see [the docs](#documentation).
 - **Reliability & Production-readiness**
   - Production-ready: memory-safe Rust core, test suite, automated CI
   - Graceful leader failure handling, node hot-join/removal
-  - In-memory fast path and persistent storage backends roadmap
+  - In-memory fast path and persistent storage backends
   - Comprehensive documentation (setup, API, integration)
 
 - **Developer Experience**
@@ -181,25 +209,35 @@ For cluster setup & advanced options, see [the docs](#documentation).
 
 ## 🗺️ Roadmap
 
-### Completed in v0.5.0 ✅
+### Completed in v0.6.0 ✅
+- [x] API Key authentication (Argon2)
+- [x] JWT token support
+- [x] Role-Based Access Control (RBAC)
+- [x] Multi-tenancy (tenant isolation)
+- [x] Encryption at rest (AES-256-GCM)
+- [x] Per-tenant quotas (storage, objects, rate limits)
 - [x] TTL (Time-To-Live) for automatic key expiration
 - [x] LZ4 compression for storage efficiency
 - [x] Rate limiting with token bucket algorithm
 - [x] Request ID tracking and structured logging
 - [x] Enhanced Prometheus metrics with histograms
 - [x] Kubernetes health probes (readiness/liveness)
+- [x] **Audit logging for admin and data events**
+- [x] **Persistent storage backends (RocksDB, Sled, in-memory)**
+- [x] **Watch/Subscribe system for real-time key change notifications (WebSocket/SSE)**
 
-### Next Up (v0.6.0)
-- [ ] Persistent storage backends (RocksDB, Sled, etc.)
-- [ ] Pluggable authentication & access control
-- [ ] Audit logging
-
-### Future (v0.7.0+)
-- [ ] Watch/Subscribe for real-time key change notifications
+### Next Up (v0.7.0)
 - [ ] Secondary indexes
-- [ ] Transactions multi-clés
+- [ ] Multi-key transactions
 - [ ] Durable S3-backed object store
 - [ ] Streaming/batch import/export
+
+### Future (v0.7.0+)
+- [ ] Cross-datacenter replication
+- [ ] Change Data Capture (CDC)
+- [ ] Admin Web UI
+- [ ] Backup & Restore
+- [ ] Plugin system
 
 ---
 
