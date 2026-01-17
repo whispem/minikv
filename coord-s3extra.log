@@ -1,7 +1,0 @@
-[2m2025-12-30T22:29:36.559741Z[0m [32m INFO[0m [2mminikv::coordinator::server[0m[2m:[0m Starting coordinator: coord-s3extra
-[2m2025-12-30T22:29:36.559810Z[0m [32m INFO[0m [2mminikv::coordinator::server[0m[2m:[0m   HTTP API: 127.0.0.1:49934
-[2m2025-12-30T22:29:36.559817Z[0m [32m INFO[0m [2mminikv::coordinator::server[0m[2m:[0m   gRPC API: 127.0.0.1:49939
-[2m2025-12-30T22:29:36.559821Z[0m [32m INFO[0m [2mminikv::coordinator::server[0m[2m:[0m   DB path: ./coord-s3extra-data
-[2m2025-12-30T22:29:36.559826Z[0m [32m INFO[0m [2mminikv::coordinator::server[0m[2m:[0m   Replicas: 3
-[2m2025-12-30T22:29:36.563678Z[0m [32m INFO[0m [2mminikv::coordinator::server[0m[2m:[0m ✓ Coordinator ready (Follower)
-rror: While lock file: ./coord-s3extra-data/LOCK: Resource temporarily unavailable

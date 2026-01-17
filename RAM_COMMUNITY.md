@@ -28,8 +28,8 @@ RAM brings together people who want to learn, build, and share Rust — whether 
 
 ## 📢 Our Community
 
-- **60 members** on Discord
-- **84 followers** on LinkedIn
+- **62 members** on Discord
+- **86 followers** on LinkedIn
 - Grew from scratch in just a single month — and you're welcome to help us grow even more!
 
 
@@ -37,7 +37,7 @@ RAM brings together people who want to learn, build, and share Rust — whether 
 ## 📅 Meetups & Events
 
 RAM organizes:
-- **Online events:** The very first meetup will be held *online* to include as many people as possible — wherever you are!
+- **Online events:** The very first meetup was on January 14, 8:30PM CET
 - **IRL get-togethers:** Future events will also take place physically in Aix-en-Provence, Marseille, and the surrounding area for those who love face-to-face connections and local networking.
 
 **What you’ll find:**

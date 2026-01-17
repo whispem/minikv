@@ -1,6 +1,0 @@
-[2m2025-12-30T22:52:26.033776Z[0m [32m INFO[0m [2mminikv::coordinator::server[0m[2m:[0m Starting coordinator: coord-test
-[2m2025-12-30T22:52:26.033842Z[0m [32m INFO[0m [2mminikv::coordinator::server[0m[2m:[0m   HTTP API: 127.0.0.1:50509
-[2m2025-12-30T22:52:26.033847Z[0m [32m INFO[0m [2mminikv::coordinator::server[0m[2m:[0m   gRPC API: 127.0.0.1:50510
-[2m2025-12-30T22:52:26.033850Z[0m [32m INFO[0m [2mminikv::coordinator::server[0m[2m:[0m   DB path: ./coord-test-data
-[2m2025-12-30T22:52:26.033853Z[0m [32m INFO[0m [2mminikv::coordinator::server[0m[2m:[0m   Replicas: 3
-[2m2025-12-30T22:52:26.038523Z[0m [32m INFO[0m [2mminikv::coordinator::server[0m[2m:[0m ✓ Coordinator ready (Follower)
