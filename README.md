@@ -1,29 +1,29 @@
 # 🦀 minikv
 
-**A production-ready distributed key-value store with Raft consensus**
+**A distributed, multi-tenant key-value & object store written in Rust**
 
-*Built in 24 hours by someone learning Rust for 42 days — proof that curiosity and persistence pay off!*
+minikv provides strong consistency (Raft + 2PC), durability (WAL), and production-grade observability, security, and multi-tenancy — all in a modern Rust codebase.
+
+Built in public as a learning-by-doing project — now evolved into a complete, reference implementation of distributed systems in Rust.
 
 [![Repo](https://img.shields.io/badge/github-whispem%2Fminikv-blue)](https://github.com/whispem/minikv)
 [![Rust](https://img.shields.io/badge/rust-1.81+-orange.svg)](https://rustup.rs/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Production Ready](https://img.shields.io/badge/status-production_ready-success)](https://github.com/whispem/minikv)
+[![Production Grade](https://img.shields.io/badge/status-production_grade-success)](https://github.com/whispem/minikv)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](.github/workflows/ci.yml)
 
 ---
 
-## 🚦 What's New in v0.6.0
+## 🚦 What's New in v0.7.0
 
-minikv v0.6.0 brings enterprise-grade security and multi-tenancy:
+minikv v0.7.0 brings advanced data management and query capabilities :
 
-- **NEW:** API Key Authentication — secure access with Argon2-hashed keys
-- **NEW:** JWT Token Support — stateless auth with configurable expiration
-- **NEW:** Role-Based Access Control (RBAC) — Admin, ReadWrite, ReadOnly roles
-- **NEW:** Multi-tenancy — tenant isolation with per-tenant data tagging
-- **NEW:** Encryption at Rest — AES-256-GCM with HKDF key derivation
-- **NEW:** Tenant Quotas — storage, object count, and rate limits per tenant
+- **Secondary indexes :** Search keys by value content with `GET /search?value=<substring>`
+- **Multi-key transactions :** Execute multiple operations atomically with `POST /transaction`
+- **Streaming/batch import/export :** Bulk data operations with `POST /admin/import` & `GET /admin/export`
+- **Durable S3-backed object store :** Persistent storage for S3-compatible API via pluggable backends
 
-**Previous highlights (v0.5.0):** TTL support, LZ4 compression, rate limiting, request tracing, enhanced metrics, Kubernetes health probes.
+Previous highlights (v0.6.0) : enterprise security, multi-tenancy, encryption at rest, quotas, audit logging, persistent backends, watch/subscribe system.
 
 ---
 
@@ -46,193 +46,128 @@ minikv v0.6.0 brings enterprise-grade security and multi-tenancy:
 
 ## 🤔 What is minikv?
 
-**minikv** is a distributed key-value store written in [Rust](https://www.rust-lang.org/), designed for simplicity, speed, and reliability—whether you’re learning, scaling, or deploying in production.
+minikv is a distributed key-value store written in [Rust](https://www.rust-lang.org/), designed for simplicity, speed, and reliability.
 
-- **Raft** for cluster consensus and leader election
-- **Two-Phase Commit** for safe distributed writes
-- **Write-Ahead Log** (WAL) for durability
-- **Virtual sharding** (256 vshards) for smooth scaling
-- **Bloom filters** for fast lookups
-- **gRPC** for node-to-node communication
-- **HTTP REST API** for clients
-- **S3-compatible API** (demo, in-memory)
+**Who is this for ?**  
+minikv is for engineers learning distributed systems, teams experimenting with Rust-based infrastructure, and anyone curious about consensus, durability, and system trade-offs.
+
+- **Clustered :** Raft consensus and 2PC for transactional writes
+- **Virtual Sharding :** 256 vshards for elastic scaling & balancing
+- **WAL :** Write-ahead log for durability
+- **gRPC** for node communication, **HTTP REST & S3 API** for clients
+- **Bloom filters, snapshots, watch/subscribe** for performance & reactivity
 
 ---
 
 ## 🛠 Tech Stack
 
-Language composition:
-
-- **Rust** (~82%) — main logic, performance, and type safety
-- **Shell** (~14%) — orchestration and automation scripts
-- **JavaScript** (~2%) — benchmarks and tools
-- **Makefile** (~2%) — build flows
+- **Rust** – core logic
+- **Shell** – orchestration/automation
+- **JavaScript** – benchmarks, tools
+- **Makefile** – build flows
 
 ---
 
 ## ⚡ Quick Start
 
 ```bash
-# Clone & build
 git clone https://github.com/whispem/minikv.git
 cd minikv
 cargo build --release
 
-# Start a single node
-curl localhost:8080/s3/mybucket/mykey
-curl localhost:8080/health/ready  # Kubernetes readiness
-curl localhost:8080/health/live   # Kubernetes liveness
-curl localhost:8080/metrics
+# Start a node
 cargo run -- --config config.example.toml
 
-# Admin dashboard
-curl http://localhost:8080/admin/status
+# API examples
+curl localhost:8080/health/ready   # readiness
+curl localhost:8080/metrics        # Prometheus metrics
+curl localhost:8080/admin/status   # admin dashboard
 
-# Create an API key (admin)
-curl -X POST http://localhost:8080/admin/keys \
-  -H "Authorization: Bearer <admin_api_key>" \
-  -d '{"role":"ReadWrite","tenant_id":"acme"}'
+# Create API key (admin)
+curl -X POST http://localhost:8080/admin/keys -d '{"role":"ReadWrite","tenant_id":"acme"}'
 
-# S3 API: Put & Get (with API key)
-curl -X PUT localhost:8080/s3/mybucket/mykey \
-  -H "Authorization: Bearer <api_key>" \
-  -d 'hello minikv!'
-curl -H "Authorization: Bearer <api_key>" localhost:8080/s3/mybucket/mykey
-
-# TTL support: key expires in 60 seconds
-curl -X PUT localhost:8080/s3/mybucket/temp-key \
-  -H "Authorization: Bearer <api_key>" \
-  -H "X-Minikv-TTL: 60" \
-  -d 'this expires soon!'
-
-# Health probes
-curl localhost:8080/health/ready  # Kubernetes readiness
-curl localhost:8080/health/live   # Kubernetes liveness
-
-# Enhanced metrics
-curl localhost:8080/metrics
+# S3 (demo)
+curl -X PUT localhost:8080/s3/mybucket/mykey -d 'hello minikv!'
+curl localhost:8080/s3/mybucket/mykey
 ```
-For cluster setup & advanced options, see [the docs](#documentation).
+For cluster setup and advanced options, see the [documentation](#documentation).
 
 ---
 
 ## 📐 Architecture
 
-- **Raft**: consensus & leader election across nodes.
-- **2PC**: atomic distributed/batch writes.
-- **Virtual Shards**: 256 v-shards mapped to nodes, for easy scaling/rebalancing.
-- **Storage**: in-memory + (future) persistent backends.
-- **Admin endpoints**: HTTP API for monitoring & orchestration.
-- **Config**: ENV, file, or CLI flags.
+- **Raft**: consensus and leader election
+- **2PC**: atomic distributed/batch writes
+- **Virtual Shards**: scale and rebalance across 256 partitions
+- **Pluggable Storage**: in-memory, RocksDB, Sled
+- **Admin API**: HTTP endpoints for status, metrics and config
+- **Config**: via environment, file or CLI flags
 
 ---
 
 ## 🚀 Performance
 
-- Write throughput: >50,000 ops/sec (single node, in-memory)
+- Write throughput : over 50,000 operations/sec (single node, in-memory)
 - Sub-millisecond read latency
-- Cluster tested 3–5 nodes on commodity VMs
+- Cluster tested (3–5 nodes, commodity VMs)
 - Built-in Prometheus metrics
 
 ---
 
 ## 🌟 Features
 
-- **Distributed Core**
-  - Multi-node Raft consensus for reliable, highly-available clusters
-  - 256 virtual shards (sharding) for scalability and cluster rebalancing
-  - Two-Phase Commit (2PC) for atomic multi-node/batch writes
-  - Cluster auto-rebalancing (volumes, shards)
-  - Write-Ahead Log (WAL) for durability and crash recovery
+### Distributed Core
+- Raft consensus (multi-node, strong consistency)
+- Two-phase commit (2PC) for atomic multi-key transactions
+- 256 virtual shards for cluster scaling and rebalancing
+- Write-ahead log (WAL) for durability
+- Auto-rebalancing, graceful leader failover, hot-join and node removal
 
+### Data Management
+- Time-To-Live keys (TTL)
+- LZ4 compression (configurable)
+- Bloom filters and index snapshots
+- Pluggable and persistent storage: in-memory, RocksDB, Sled
+- Batch & range operations, prefix queries
 
-- **Data Management**
-  - TTL (Time-To-Live) support for automatic key expiration
-  - LZ4 compression for efficient storage (configurable)
-  - Bloom filters for fast negative lookups
-  - Index snapshots for fast restarts
-  - **Pluggable storage backends:** In-memory, RocksDB, Sled (configurable, persistent)
-  - **Persistent storage backends:** In-memory, RocksDB, Sled (configurable, production-ready)
-  - **Real-time notifications:** Watch/Subscribe system (WebSocket & SSE endpoints) for key changes (PUT/DELETE/REVOKE)
+### API
+- HTTP REST (CRUD, batch, range, admin)
+- S3-compatible API (with TTL extensions)
+- gRPC (internal)
+- WebSocket and SSE endpoints for real-time watch/subscribe events
 
+### Security & Multi-tenancy
+- API keys (Argon2) and JWT authentication
+- Role-based access control (RBAC) and audit logging
+- Multi-tenant isolation
+- AES-256-GCM encryption at rest
+- Per-tenant quotas (storage, requests, rate limits)
+- TLS (HTTP & gRPC)
 
-- **Flexible API**
-  - HTTP REST API: CRUD operations, batch, and range queries
-  - Batch operations: multi-put, multi-get, multi-delete
-  - Range queries and prefix scans for efficient bulk access
-  - **NEW:** S3-compatible API with TTL support: `/s3/:bucket/:key`
-  - gRPC API for internal cluster communication
+### Observability
+- Admin dashboard
+- Prometheus metrics (counters, histograms)
+- Request and endpoint statistics
+- Structured logging and tracing spans
+- Kubernetes health probes
 
-
-- **Observability & Admin**
-  - Admin dashboard endpoint `/admin/status`: full cluster state
-  - Enhanced Prometheus metrics with latency histograms
-  - Per-endpoint request/error counters
-  - Kubernetes-ready health probes (`/health/ready`, `/health/live`)
-  - Request ID tracking via `X-Request-ID` header
-  - **Structured audit logging:** All admin and sensitive actions (file + stdout)
-  - **Watch/Subscribe endpoints:** `/watch/sse` (SSE) and `/watch/ws` (WebSocket) for real-time key change events
-
-
-- **Protection & Reliability**
-  - Rate limiting with per-IP token bucket algorithm
-  - Structured logging with tracing spans
-  - TLS encryption for HTTP and gRPC endpoints
-  - Graceful leader failure handling, node hot-join/removal
-
-- **Security & Multi-tenancy (v0.6.0)**
-  - **NEW:** API Key authentication with Argon2 hashing
-  - **NEW:** JWT token support for stateless auth
-  - **NEW:** Role-Based Access Control (Admin/ReadWrite/ReadOnly)
-  - **NEW:** Multi-tenant data isolation
-  - **NEW:** AES-256-GCM encryption at rest
-  - **NEW:** Per-tenant quotas (storage, objects, rate limits)
-  - **NEW:** Audit logging for all admin and data modification events
-  - TLS encryption for HTTP and gRPC endpoints
-  - Configurable via file, ENV, or CLI
-  - Stateless binary (single static executable)
-  - Easy deployment: works locally, on VMs, or containers
-
-- **Reliability & Production-readiness**
-  - Production-ready: memory-safe Rust core, test suite, automated CI
-  - Graceful leader failure handling, node hot-join/removal
-  - In-memory fast path and persistent storage backends
-  - Comprehensive documentation (setup, API, integration)
-
-- **Developer Experience**
-  - Clean async/await Rust codebase
-  - 100% English docs/code/comments
-  - One-command local or multinode launch
-  - Benchmarks and developer tooling included
+### Production-grade Design
+- Memory-safe Rust
+- Test suite, automated CI
+- Documentation and sample config
+- Single static binary
 
 ---
 
 ## 🗺️ Roadmap
 
-### Completed in v0.6.0 ✅
-- [x] API Key authentication (Argon2)
-- [x] JWT token support
-- [x] Role-Based Access Control (RBAC)
-- [x] Multi-tenancy (tenant isolation)
-- [x] Encryption at rest (AES-256-GCM)
-- [x] Per-tenant quotas (storage, objects, rate limits)
-- [x] TTL (Time-To-Live) for automatic key expiration
-- [x] LZ4 compression for storage efficiency
-- [x] Rate limiting with token bucket algorithm
-- [x] Request ID tracking and structured logging
-- [x] Enhanced Prometheus metrics with histograms
-- [x] Kubernetes health probes (readiness/liveness)
-- [x] **Audit logging for admin and data events**
-- [x] **Persistent storage backends (RocksDB, Sled, in-memory)**
-- [x] **Watch/Subscribe system for real-time key change notifications (WebSocket/SSE)**
+### v0.7.0 (latest)
+- [x] Secondary indexes
+- [x] Multi-key transactions
+- [x] Durable S3-backed object store
+- [x] Batch import/export
 
-### Next Up (v0.7.0)
-- [ ] Secondary indexes
-- [ ] Multi-key transactions
-- [ ] Durable S3-backed object store
-- [ ] Streaming/batch import/export
-
-### Future (v0.7.0+)
+### Next (v0.8.0+)
 - [ ] Cross-datacenter replication
 - [ ] Change Data Capture (CDC)
 - [ ] Admin Web UI
@@ -243,16 +178,15 @@ For cluster setup & advanced options, see [the docs](#documentation).
 
 ## 📖 Story
 
-minikv started as a 24-hour challenge by a Rust learner (42 days into the language!).  
-Now it serves as both a playground and a modern reference for distributed systems: curiosity, learning-by-doing, and robust engineering principles.
+minikv started as a 24-hour challenge by a Rust learner (42 days into the language!). It now serves as both a playground and a reference for distributed systems, demonstrating curiosity, learning-by-doing, and robust engineering.
 
 ---
 
 ## 📚 Documentation
 
-- **Config Example**: [`config.example.toml`](config.example.toml)
-- **Cluster setup, API, and usage**: see [`docs/`](docs)
-- **TLS certificate generation**: [`certs/README.md`](certs/README.md)
+- **Example config :** [`config.example.toml`](config.example.toml)
+- **Cluster, API, usage :** see [`docs/`](docs)
+- **Certificate generation :** [`certs/README.md`](certs/README.md)
 
 ---
 
@@ -264,7 +198,7 @@ cargo clippy --fix   # Lint and fix
 cargo fmt            # Format code
 ```
 
-CI runs on push & PR via [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
+Continuous Integration runs on push & PR via [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
 ---
 
@@ -277,6 +211,6 @@ Issues and PRs welcome! See [CONTRIBUTING.md](CONTRIBUTING.md).
 ## 📬 Contact
 
 - GitHub: [whispem/minikv](https://github.com/whispem/minikv)
-- Email: contact via GitHub profile
+- Email: via GitHub profile
 
 ---

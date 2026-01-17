@@ -5,6 +5,25 @@ All notable changes to minikv will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added - v0.7.0 Release
+
+#### Streaming/batch import/export
+- `POST /admin/import` - Batch import key-value pairs from JSON payload
+- `GET /admin/export` - Streaming export of all key-value pairs as NDJSON
+
+#### Multi-key transactions
+- `POST /transaction` - Execute multiple operations (put/delete) in a single request
+- Returns detailed results for each operation with success/error status
+
+#### Secondary indexes
+- `GET /search?value=<substring>` - Search for keys whose values contain the specified substring
+
+#### Durable S3-backed object store
+- S3-compatible API now supports pluggable persistent storage backends (RocksDB, Sled)
+- Objects can be stored durably by configuring storage backend in config.toml
+
 ---
 
 ## [0.6.0] - 2025-01-20

@@ -489,6 +489,13 @@ pub fn create_router(state: CoordState) -> Router {
             "/admin/keys/:key_id",
             axum::routing::delete(admin_delete_key),
         )
+        // Streaming/batch import/export (v0.7.0)
+        .route("/admin/import", axum::routing::post(admin_import))
+        .route("/admin/export", axum::routing::get(admin_export))
+        // Multi-key transactions (v0.7.0)
+        .route("/transaction", axum::routing::post(transaction_ops))
+        // Secondary indexes (v0.7.0)
+        .route("/search", axum::routing::get(search_keys))
         // Prometheus metrics endpoint (enhanced in v0.5.0)
         .route("/metrics", axum::routing::get(metrics))
         // Range queries and batch operations
@@ -565,6 +572,195 @@ async fn admin_status(State(state): State<CoordState>) -> impl IntoResponse {
         "volume_ids": volume_ids,
         "nb_s3_objects": nb_s3_objects
     }))
+}
+
+/// Batch import key-value pairs (v0.7.0)
+#[derive(Deserialize)]
+struct ImportRequest {
+    entries: Vec<KeyValueEntry>,
+}
+
+#[derive(Deserialize)]
+struct KeyValueEntry {
+    key: String,
+    value: String,
+}
+
+async fn admin_import(
+    State(_state): State<CoordState>,
+    axum::Json(req): axum::Json<ImportRequest>,
+) -> impl IntoResponse {
+    let mut success_count = 0;
+    let errors: Vec<String> = Vec::new();
+
+    for entry in req.entries {
+        STORAGE.put(&entry.key, entry.value.into_bytes());
+        success_count += 1;
+    }
+
+    AUDIT_LOGGER.log_event(
+        AuditEventType::System,
+        "admin".to_string(),
+        None,
+        format!("Imported {} keys", success_count),
+        None,
+    );
+
+    axum::Json(json!({
+        "imported": success_count,
+        "errors": errors
+    }))
+}
+
+/// Streaming export of all key-value pairs (v0.7.0)
+async fn admin_export(State(state): State<CoordState>) -> impl IntoResponse {
+    let keys = match state.metadata.list_keys() {
+        Ok(keys) => keys,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("list_keys error: {}", e),
+            )
+                .into_response();
+        }
+    };
+
+    let body = stream! {
+        for key in keys {
+            if let Some(value) = STORAGE.get(&key) {
+                let entry = json!({
+                    "key": key,
+                    "value": String::from_utf8_lossy(&value)
+                });
+                yield Ok::<_, std::convert::Infallible>(axum::body::Bytes::from(format!("{}\n", entry)));
+            }
+        }
+    };
+
+    (
+        StatusCode::OK,
+        [("content-type", "application/x-ndjson")],
+        axum::body::Body::from_stream(body),
+    )
+        .into_response()
+}
+
+/// Multi-key transactions (v0.7.0)
+#[derive(Deserialize)]
+struct TransactionRequest {
+    operations: Vec<Operation>,
+}
+
+#[derive(Deserialize)]
+struct Operation {
+    op: String, // "put" or "delete"
+    key: String,
+    value: Option<String>,
+}
+
+async fn transaction_ops(
+    State(_state): State<CoordState>,
+    axum::Json(req): axum::Json<TransactionRequest>,
+) -> impl IntoResponse {
+    let mut results = Vec::new();
+    let mut success_count = 0;
+    let total_operations = req.operations.len();
+
+    for op in &req.operations {
+        match op.op.as_str() {
+            "put" => {
+                if let Some(ref value) = op.value {
+                    STORAGE.put(&op.key, value.clone().into_bytes());
+                    success_count += 1;
+                    results.push(TransactionResult {
+                        op: op.op.clone(),
+                        key: op.key.clone(),
+                        success: true,
+                        error: None,
+                    });
+                } else {
+                    results.push(TransactionResult {
+                        op: op.op.clone(),
+                        key: op.key.clone(),
+                        success: false,
+                        error: Some("value required for put".to_string()),
+                    });
+                }
+            }
+            "delete" => {
+                STORAGE.delete(&op.key);
+                success_count += 1;
+                results.push(TransactionResult {
+                    op: op.op.clone(),
+                    key: op.key.clone(),
+                    success: true,
+                    error: None,
+                });
+            }
+            _ => {
+                results.push(TransactionResult {
+                    op: op.op.clone(),
+                    key: op.key.clone(),
+                    success: false,
+                    error: Some("unknown operation".to_string()),
+                });
+            }
+        }
+    }
+
+    AUDIT_LOGGER.log_event(
+        AuditEventType::System,
+        "transaction".to_string(),
+        None,
+        format!("Executed {} operations in transaction", success_count),
+        None,
+    );
+
+    axum::Json(json!({
+        "results": results,
+        "total_operations": total_operations,
+        "successful_operations": success_count
+    }))
+}
+
+/// Secondary indexes - search keys by value substring (v0.7.0)
+#[derive(Deserialize)]
+struct SearchQuery {
+    value: String,
+}
+
+async fn search_keys(
+    State(state): State<CoordState>,
+    Query(params): Query<SearchQuery>,
+) -> impl IntoResponse {
+    match state.metadata.list_keys() {
+        Ok(keys) => {
+            let mut matching_keys = Vec::new();
+            for key in keys {
+                if let Some(value_bytes) = STORAGE.get(&key) {
+                    if let Ok(value_str) = std::str::from_utf8(&value_bytes) {
+                        if value_str.contains(&params.value) {
+                            matching_keys.push(key);
+                        }
+                    }
+                }
+            }
+            axum::Json(json!({
+                "query": params.value,
+                "matching_keys": matching_keys,
+                "total_matches": matching_keys.len()
+            }))
+        }
+        Err(e) => axum::Json(json!({ "error": format!("list_keys error: {}", e) })),
+    }
+}
+
+#[derive(Serialize)]
+struct TransactionResult {
+    op: String,
+    key: String,
+    success: bool,
+    error: Option<String>,
 }
 
 /// HTTP handler for range queries: GET /range?start=...&end=...&include_values=...
