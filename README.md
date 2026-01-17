@@ -178,7 +178,7 @@ For cluster setup and advanced options, see the [documentation](#documentation).
 
 ## 📖 Story
 
-minikv started as a 24-hour challenge by a Rust learner (42 days into the language!). It now serves as both a playground and a reference for distributed systems, demonstrating curiosity, learning-by-doing, and robust engineering.
+minikv started as a 24-hour challenge by a Rust learner (82 days into the language!). It now serves as both a playground and a reference for distributed systems, demonstrating curiosity, learning-by-doing, and robust engineering.
 
 ---
 
