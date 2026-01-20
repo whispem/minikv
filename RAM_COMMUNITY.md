@@ -28,8 +28,8 @@ RAM brings together people who want to learn, build, and share Rust — whether 
 
 ## 📢 Our Community
 
-- **62 members** on Discord
-- **86 followers** on LinkedIn
+- **66 members** on Discord
+- **88 followers** on LinkedIn
 - Grew from scratch in just a single month — and you're welcome to help us grow even more!
 
 
