@@ -24,7 +24,8 @@ service CoordinatorInternal {
   rpc RequestVote(VoteRequest) returns (VoteResponse);
   rpc AppendEntries(AppendRequest) returns (AppendResponse);
   rpc InstallSnapshot(SnapshotRequest) returns (SnapshotResponse);
-  
+  rpc ReadIndex(ReadIndexRequest) returns (ReadIndexResponse);
+
   // Volume registration
   rpc Join(JoinRequest) returns (JoinResponse);
   rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
@@ -80,6 +81,7 @@ message PrepareRequest {
   string upload_id = 2;
   uint64 expected_size = 3;
   string expected_blake3 = 4;
+  bytes data = 5;
 }
 
 message PrepareResponse {
@@ -184,6 +186,14 @@ message SnapshotRequest {
 
 message SnapshotResponse {
   uint64 term = 1;
+}
+
+message ReadIndexRequest {}
+
+message ReadIndexResponse {
+  bool is_leader = 1;
+  uint64 read_index = 2;
+  string leader_id = 3;
 }
 
 message LogEntry {

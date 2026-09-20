@@ -1,13 +1,22 @@
 impl Config {
     /// Loads configuration from a TOML file and overrides with environment variables (prefix MINIKV_)
     pub fn load() -> Self {
-        let s = config::Config::builder()
+        Self::builder()
+            .build()
+            .expect("Failed to load config")
+            .try_deserialize()
+            .expect("Failed to parse config")
+    }
+
+    pub fn try_load() -> std::result::Result<Self, config::ConfigError> {
+        Self::builder().build()?.try_deserialize()
+    }
+
+    fn builder() -> config::ConfigBuilder<config::builder::DefaultState> {
+        config::Config::builder()
             .add_source(config::File::with_name("config.toml").required(false))
             .add_source(config::File::with_name("config.local.toml").required(false))
             .add_source(config::Environment::with_prefix("MINIKV").separator("_"))
-            .build()
-            .expect("Failed to load config");
-        s.try_deserialize().expect("Failed to parse config")
     }
 }
 

@@ -16,7 +16,7 @@ services:
       - HTTP_BIND=0.0.0.0:5000
       - GRPC_BIND=0.0.0.0:5001
       - DB_PATH=/data/coord
-      - PEERS=coord-2:5003,coord-3:5005
+      - PEERS=coord-2:5001,coord-3:5001
       - REPLICAS=3
     volumes:
       - coord1-data:/data
@@ -24,7 +24,7 @@ services:
       - minikv-net
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health/live"]
       interval: 10s
       timeout: 3s
       retries: 3
@@ -44,7 +44,7 @@ services:
       - HTTP_BIND=0.0.0.0:5000
       - GRPC_BIND=0.0.0.0:5001
       - DB_PATH=/data/coord
-      - PEERS=coord-1:5001,coord-3:5005
+      - PEERS=coord-1:5001,coord-3:5001
       - REPLICAS=3
     volumes:
       - coord2-data:/data
@@ -52,7 +52,7 @@ services:
       - minikv-net
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health/live"]
       interval: 10s
       timeout: 3s
       retries: 3
@@ -71,7 +71,7 @@ services:
       - HTTP_BIND=0.0.0.0:5000
       - GRPC_BIND=0.0.0.0:5001
       - DB_PATH=/data/coord
-      - PEERS=coord-1:5001,coord-2:5003
+      - PEERS=coord-1:5001,coord-2:5001
       - REPLICAS=3
     volumes:
       - coord3-data:/data
@@ -79,7 +79,7 @@ services:
       - minikv-net
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health/live"]
       interval: 10s
       timeout: 3s
       retries: 3
@@ -99,7 +99,8 @@ services:
       - GRPC_BIND=0.0.0.0:6001
       - DATA_PATH=/data/blobs
       - WAL_PATH=/data/wal
-      - COORDINATORS=http://coord-1:5000
+      - COORDINATORS=http://coord-1:5000,http://coord-2:5000,http://coord-3:5000
+      - ADVERTISE=http://volume-1:6001
     volumes:
       - vol1-data:/data
     networks:
@@ -128,7 +129,8 @@ services:
       - GRPC_BIND=0.0.0.0:6001
       - DATA_PATH=/data/blobs
       - WAL_PATH=/data/wal
-      - COORDINATORS=http://coord-1:5000
+      - COORDINATORS=http://coord-1:5000,http://coord-2:5000,http://coord-3:5000
+      - ADVERTISE=http://volume-2:6001
     volumes:
       - vol2-data:/data
     networks:
@@ -157,7 +159,8 @@ services:
       - GRPC_BIND=0.0.0.0:6001
       - DATA_PATH=/data/blobs
       - WAL_PATH=/data/wal
-      - COORDINATORS=http://coord-1:5000
+      - COORDINATORS=http://coord-1:5000,http://coord-2:5000,http://coord-3:5000
+      - ADVERTISE=http://volume-3:6001
     volumes:
       - vol3-data:/data
     networks:

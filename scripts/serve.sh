@@ -52,19 +52,24 @@ done
 
 sleep 2
 
+COORDINATORS=""
+for i in $(seq 1 ${NUM_COORDS}); do
+    COORDINATORS="${COORDINATORS:+$COORDINATORS,}http://127.0.0.1:$((5000 + (i-1)*2))"
+done
+
 # Start volumes
 echo "Starting volumes..."
 for i in $(seq 1 ${NUM_VOLUMES}); do
     VOL_HTTP=$((6000 + (i-1)*2))
     VOL_GRPC=$((6001 + (i-1)*2))
-    
+
     ./target/release/minikv-volume serve \
         --id "vol-$i" \
         --bind "127.0.0.1:${VOL_HTTP}" \
         --grpc "127.0.0.1:${VOL_GRPC}" \
         --data "./data/vol${i}-data" \
         --wal "./data/vol${i}-wal" \
-        --coordinators "http://127.0.0.1:5000" \
+        --coordinators "${COORDINATORS}" \
         > "./data/vol${i}.log" 2>&1 &
     
     echo "  [OK] Volume $i: http://127.0.0.1:${VOL_HTTP}"

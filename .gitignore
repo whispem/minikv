@@ -39,3 +39,16 @@ config-*.toml
 
 # Ignore macOS system files
 .DS_Store
+
+# Local cluster data (make serve, make run-volume)
+/data/
+/vol*-data/
+/vol*-wal/
+
+# Python
+.venv/
+venv/
+__pycache__/
+
+# Editor settings
+.vscode/

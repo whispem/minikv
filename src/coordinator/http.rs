@@ -2,7 +2,6 @@
 //!
 //! Provides REST, S3-compatible APIs.
 
-use crate::common::storage::Storage;
 use std::time::Duration;
 
 use crate::common::auth::{Role, KEY_STORE};
@@ -54,7 +53,6 @@ async fn handle_ws(mut socket: WebSocket) {
     }
 }
 
-pub static STORAGE: Lazy<Storage> = Lazy::new(Storage::new_memory);
 const VECTOR_INDEX_PATH: &str = "./coord-data/vector_index.json";
 static VECTOR_INDEX_LOADED: AtomicBool = AtomicBool::new(false);
 
@@ -158,10 +156,31 @@ use serde_json::json;
 use std::sync::Arc;
 
 use crate::coordinator::metadata::MetadataStore;
+use crate::coordinator::objects::{ObjectError, ObjectStore, VolumeHeartbeat};
 use crate::coordinator::placement::PlacementManager;
-use crate::coordinator::raft_node::RaftNode;
+use crate::coordinator::raft_node::{RaftNode, RaftRole};
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
-use axum::response::Sse;
+use axum::response::{Response, Sse};
+
+impl IntoResponse for ObjectError {
+    fn into_response(self) -> Response {
+        let status = match &self {
+            ObjectError::NotFound => StatusCode::NOT_FOUND,
+            ObjectError::NotLeader(_) | ObjectError::NoVolumes | ObjectError::Consensus(_) => {
+                StatusCode::SERVICE_UNAVAILABLE
+            }
+            ObjectError::Volume(_) => StatusCode::BAD_GATEWAY,
+            ObjectError::Metadata(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        };
+        let mut response = (status, self.to_string()).into_response();
+        if let ObjectError::NotLeader(Some(leader)) = &self {
+            if let Ok(value) = axum::http::HeaderValue::from_str(leader) {
+                response.headers_mut().insert("x-minikv-leader", value);
+            }
+        }
+        response
+    }
+}
 
 #[derive(Debug, Deserialize)]
 struct CreateKeyRequest {
@@ -360,6 +379,16 @@ pub struct CoordState {
     pub metadata: Arc<MetadataStore>,
     pub placement: Arc<std::sync::Mutex<PlacementManager>>,
     pub raft: Arc<RaftNode>,
+    pub objects: ObjectStore,
+}
+
+fn notify_change(event: &str, key: &str) {
+    let _ = WATCH_CHANNEL.send(KeyChangeEvent {
+        event: event.to_string(),
+        key: key.to_string(),
+        tenant: Some("default".to_string()),
+        timestamp: chrono::Utc::now().timestamp(),
+    });
 }
 
 async fn s3_put_object(
@@ -367,7 +396,7 @@ async fn s3_put_object(
     Path((bucket, key)): Path<(String, String)>,
     headers: axum::http::HeaderMap,
     body: Bytes,
-) -> impl IntoResponse {
+) -> Response {
     let full_key = format!("{}/{}", bucket, key);
 
     let ttl_secs: Option<u64> = headers
@@ -375,63 +404,115 @@ async fn s3_put_object(
         .and_then(|v| v.to_str().ok())
         .and_then(|s| s.parse().ok());
 
-    crate::coordinator::http::STORAGE.put(&full_key, body.to_vec());
-    let stored_bytes = body.len();
-    let _ = WATCH_CHANNEL.send(KeyChangeEvent {
-        event: "put".to_string(),
-        key: full_key.clone(),
-        tenant: Some("default".to_string()),
-        timestamp: chrono::Utc::now().timestamp(),
-    });
-
-    let placement = state.placement.lock().unwrap();
-    let volumes = state.metadata.get_healthy_volumes().unwrap_or_default();
-    let target_volumes: Vec<String> = placement
-        .select_volumes(&full_key, &volumes)
-        .unwrap_or_default();
-    let mut prepare_ok = true;
-    for _volume_id in &target_volumes {
-        let simulated_prepare = true;
-        if !simulated_prepare {
-            prepare_ok = false;
-            break;
+    match state.objects.put(&full_key, body.to_vec()).await {
+        Ok(stored) => {
+            notify_change("put", &full_key);
+            let ttl_info = ttl_secs
+                .map(|t| format!(", TTL: {}s", t))
+                .unwrap_or_default();
+            (
+                StatusCode::OK,
+                format!(
+                    "PUT S3 {}/{} committed via 2PC on {} volume(s) ({} bytes{})",
+                    bucket,
+                    key,
+                    stored.replicas.len(),
+                    stored.size,
+                    ttl_info
+                ),
+            )
+                .into_response()
         }
+        Err(e) => e.into_response(),
     }
-    if !prepare_ok {
-        return (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!(
-                "PUT S3 {}/{} failed: prepare phase error (2PC)",
-                bucket, key
-            ),
-        );
-    }
-    for _volume_id in &target_volumes {}
-
-    let ttl_info = ttl_secs
-        .map(|t| format!(", TTL: {}s", t))
-        .unwrap_or_default();
-    (
-        StatusCode::OK,
-        format!(
-            "PUT S3 {}/{} committed via 2PC ({} bytes{})",
-            bucket, key, stored_bytes, ttl_info
-        ),
-    )
 }
 
 async fn s3_get_object(
-    State(_state): State<CoordState>,
+    State(state): State<CoordState>,
     Path((bucket, key)): Path<(String, String)>,
-) -> impl IntoResponse {
+) -> Response {
     let full_key = format!("{}/{}", bucket, key);
-    if let Some(data) = crate::coordinator::http::STORAGE.get(&full_key) {
-        (StatusCode::OK, data)
-    } else {
-        (
+    match state.objects.get(&full_key).await {
+        Ok(data) => (StatusCode::OK, data).into_response(),
+        Err(ObjectError::NotFound) => (
             StatusCode::NOT_FOUND,
-            format!("S3 object {}/{} not found", bucket, key).into_bytes(),
+            format!("S3 object {}/{} not found", bucket, key),
         )
+            .into_response(),
+        Err(e) => e.into_response(),
+    }
+}
+
+async fn s3_delete_object(
+    State(state): State<CoordState>,
+    Path((bucket, key)): Path<(String, String)>,
+) -> Response {
+    let full_key = format!("{}/{}", bucket, key);
+    match state.objects.delete(&full_key).await {
+        Ok(()) => {
+            notify_change("delete", &full_key);
+            StatusCode::NO_CONTENT.into_response()
+        }
+        Err(ObjectError::NotFound) => (
+            StatusCode::NOT_FOUND,
+            format!("S3 object {}/{} not found", bucket, key),
+        )
+            .into_response(),
+        Err(e) => e.into_response(),
+    }
+}
+
+async fn kv_put(State(state): State<CoordState>, Path(key): Path<String>, body: Bytes) -> Response {
+    match state.objects.put(&key, body.to_vec()).await {
+        Ok(stored) => {
+            notify_change("put", &key);
+            (
+                StatusCode::OK,
+                format!(
+                    "PUT {} committed via 2PC on {} volume(s) ({} bytes)",
+                    key,
+                    stored.replicas.len(),
+                    stored.size
+                ),
+            )
+                .into_response()
+        }
+        Err(e) => e.into_response(),
+    }
+}
+
+async fn kv_get(State(state): State<CoordState>, Path(key): Path<String>) -> Response {
+    match state.objects.get(&key).await {
+        Ok(data) => (StatusCode::OK, data).into_response(),
+        Err(e) => e.into_response(),
+    }
+}
+
+async fn kv_delete(State(state): State<CoordState>, Path(key): Path<String>) -> Response {
+    match state.objects.delete(&key).await {
+        Ok(()) => {
+            notify_change("delete", &key);
+            (StatusCode::OK, format!("DELETE {} succeeded", key)).into_response()
+        }
+        Err(e) => e.into_response(),
+    }
+}
+
+async fn volume_heartbeat(
+    State(state): State<CoordState>,
+    axum::Json(heartbeat): axum::Json<VolumeHeartbeat>,
+) -> Response {
+    match state.objects.record_heartbeat(heartbeat) {
+        Ok(()) => (
+            StatusCode::OK,
+            axum::Json(json!({ "ok": true, "leader": state.raft.get_leader() })),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            axum::Json(json!({ "ok": false, "error": e.to_string() })),
+        )
+            .into_response(),
     }
 }
 
@@ -439,9 +520,23 @@ pub fn create_router(state: CoordState) -> Router {
     Router::new()
         .route("/watch/sse", axum::routing::get(watch_sse))
         .route("/watch/ws", axum::routing::get(watch_ws))
-        .route("/s3/:bucket/:key", axum::routing::put(s3_put_object))
-        .route("/s3/:bucket/:key", axum::routing::get(s3_get_object))
-        .route("/:key", axum::routing::delete(delete_key))
+        .route(
+            "/s3/:bucket/:key",
+            axum::routing::put(s3_put_object)
+                .get(s3_get_object)
+                .delete(s3_delete_object),
+        )
+        .route(
+            "/:key",
+            axum::routing::get(kv_get)
+                .put(kv_put)
+                .post(kv_put)
+                .delete(kv_delete),
+        )
+        .route(
+            "/internal/volumes/heartbeat",
+            axum::routing::post(volume_heartbeat),
+        )
         .route("/admin/repair", axum::routing::post(admin_repair))
         .route("/admin/compact", axum::routing::post(admin_compact))
         .route("/admin/verify", axum::routing::post(admin_verify))
@@ -512,16 +607,17 @@ pub fn create_router(state: CoordState) -> Router {
 }
 
 async fn health_ready(State(state): State<CoordState>) -> impl IntoResponse {
-    let volumes = state.metadata.get_healthy_volumes().unwrap_or_default();
-    let has_leader = state.raft.is_leader() || !state.raft.get_peers().is_empty();
+    let volumes = state.objects.live_volumes();
+    let leader = state.raft.get_leader();
 
-    if !volumes.is_empty() && has_leader {
+    if !volumes.is_empty() && leader.is_some() {
         (
             StatusCode::OK,
             axum::Json(json!({
                 "ready": true,
                 "healthy_volumes": volumes.len(),
                 "is_leader": state.raft.is_leader(),
+                "leader": leader,
             })),
         )
     } else {
@@ -531,6 +627,7 @@ async fn health_ready(State(state): State<CoordState>) -> impl IntoResponse {
                 "ready": false,
                 "healthy_volumes": volumes.len(),
                 "is_leader": state.raft.is_leader(),
+                "leader": leader,
                 "reason": if volumes.is_empty() { "No healthy volumes" } else { "No Raft leader" }
             })),
         )
@@ -552,19 +649,25 @@ async fn health_live() -> impl IntoResponse {
 }
 
 async fn admin_status(State(state): State<CoordState>) -> impl IntoResponse {
-    let role = if state.raft.is_leader() {
-        "Leader"
-    } else {
-        "Follower"
+    let role = match state.raft.get_role() {
+        RaftRole::Leader => "Leader",
+        RaftRole::Candidate => "Candidate",
+        RaftRole::Follower => "Follower",
     };
     let nb_peers = state.raft.get_peers().len();
-    let volumes = state.metadata.get_healthy_volumes().unwrap_or_default();
+    let volumes = state.objects.live_volumes();
     let nb_volumes = volumes.len();
     let volume_ids: Vec<_> = volumes.iter().map(|v| v.volume_id.clone()).collect();
-    let nb_s3_objects = 0;
+    let nb_s3_objects = state.metadata.list_keys().map(|k| k.len()).unwrap_or(0);
     axum::Json(json!({
+        "node_id": state.raft.node_id(),
         "role": role,
-        "is_leader": state.raft.is_leader(),
+        "is_leader": role == "Leader",
+        "leader": state.raft.get_leader(),
+        "term": state.raft.get_term(),
+        "commit_index": state.raft.commit_index(),
+        "last_applied": state.raft.last_applied(),
+        "log_length": state.raft.log_len(),
         "nb_peers": nb_peers,
         "nb_volumes": nb_volumes,
         "volume_ids": volume_ids,
@@ -584,15 +687,21 @@ struct KeyValueEntry {
 }
 
 async fn admin_import(
-    State(_state): State<CoordState>,
+    State(state): State<CoordState>,
     axum::Json(req): axum::Json<ImportRequest>,
 ) -> impl IntoResponse {
     let mut success_count = 0;
-    let errors: Vec<String> = Vec::new();
+    let mut errors: Vec<String> = Vec::new();
 
     for entry in req.entries {
-        STORAGE.put(&entry.key, entry.value.into_bytes());
-        success_count += 1;
+        match state
+            .objects
+            .put(&entry.key, entry.value.into_bytes())
+            .await
+        {
+            Ok(_) => success_count += 1,
+            Err(e) => errors.push(format!("{}: {}", entry.key, e)),
+        }
     }
 
     AUDIT_LOGGER.log_event(
@@ -621,9 +730,10 @@ async fn admin_export(State(state): State<CoordState>) -> impl IntoResponse {
         }
     };
 
+    let objects = state.objects.clone();
     let body = stream! {
         for key in keys {
-            if let Some(value) = STORAGE.get(&key) {
+            if let Ok(value) = objects.get(&key).await {
                 let entry = json!({
                     "key": key,
                     "value": String::from_utf8_lossy(&value)
@@ -654,7 +764,7 @@ struct Operation {
 }
 
 async fn transaction_ops(
-    State(_state): State<CoordState>,
+    State(state): State<CoordState>,
     axum::Json(req): axum::Json<TransactionRequest>,
 ) -> impl IntoResponse {
     let mut results = Vec::new();
@@ -665,13 +775,15 @@ async fn transaction_ops(
         match op.op.as_str() {
             "put" => {
                 if let Some(ref value) = op.value {
-                    STORAGE.put(&op.key, value.clone().into_bytes());
-                    success_count += 1;
+                    let outcome = state.objects.put(&op.key, value.clone().into_bytes()).await;
+                    if outcome.is_ok() {
+                        success_count += 1;
+                    }
                     results.push(TransactionResult {
                         op: op.op.clone(),
                         key: op.key.clone(),
-                        success: true,
-                        error: None,
+                        success: outcome.is_ok(),
+                        error: outcome.err().map(|e| e.to_string()),
                     });
                 } else {
                     results.push(TransactionResult {
@@ -683,13 +795,18 @@ async fn transaction_ops(
                 }
             }
             "delete" => {
-                STORAGE.delete(&op.key);
-                success_count += 1;
+                let outcome = match state.objects.delete(&op.key).await {
+                    Err(ObjectError::NotFound) => Ok(()),
+                    other => other,
+                };
+                if outcome.is_ok() {
+                    success_count += 1;
+                }
                 results.push(TransactionResult {
                     op: op.op.clone(),
                     key: op.key.clone(),
-                    success: true,
-                    error: None,
+                    success: outcome.is_ok(),
+                    error: outcome.err().map(|e| e.to_string()),
                 });
             }
             _ => {
@@ -731,7 +848,7 @@ async fn search_keys(
         Ok(keys) => {
             let mut matching_keys = Vec::new();
             for key in keys {
-                if let Some(value_bytes) = STORAGE.get(&key) {
+                if let Ok(value_bytes) = state.objects.get(&key).await {
                     if let Ok(value_str) = std::str::from_utf8(&value_bytes) {
                         if value_str.contains(&params.value) {
                             matching_keys.push(key);
@@ -832,16 +949,7 @@ async fn batch_ops(
         match op.op.as_str() {
             "put" => {
                 if let Some(val) = op.value {
-                    let meta = crate::coordinator::metadata::KeyMetadata {
-                        key: op.key.clone(),
-                        replicas: vec![],
-                        size: val.len() as u64,
-                        blake3: "".to_string(),
-                        created_at: 0,
-                        updated_at: 0,
-                        state: crate::coordinator::metadata::KeyState::Active,
-                    };
-                    let r = state.metadata.put_key(&meta);
+                    let r = state.objects.put(&op.key, val.into_bytes()).await;
                     results.push(BatchResultResp {
                         ok: r.is_ok(),
                         key: op.key,
@@ -858,15 +966,15 @@ async fn batch_ops(
                 }
             }
             "get" => {
-                let r = state.metadata.get_key(&op.key);
+                let r = state.objects.get(&op.key).await;
                 match r {
-                    Ok(Some(meta)) => results.push(BatchResultResp {
+                    Ok(value) => results.push(BatchResultResp {
                         ok: true,
                         key: op.key,
-                        value: Some(serde_json::to_string(&meta).unwrap()),
+                        value: Some(String::from_utf8_lossy(&value).into_owned()),
                         error: None,
                     }),
-                    Ok(None) => results.push(BatchResultResp {
+                    Err(ObjectError::NotFound) => results.push(BatchResultResp {
                         ok: false,
                         key: op.key,
                         value: None,
@@ -881,7 +989,7 @@ async fn batch_ops(
                 }
             }
             "delete" => {
-                let r = state.metadata.delete_key(&op.key);
+                let r = state.objects.delete(&op.key).await;
                 results.push(BatchResultResp {
                     ok: r.is_ok(),
                     key: op.key,
@@ -902,8 +1010,7 @@ async fn batch_ops(
 
 pub async fn metrics(State(state): State<CoordState>) -> impl IntoResponse {
     let mut out = String::new();
-    let volumes: Vec<crate::coordinator::metadata::VolumeMetadata> =
-        state.metadata.get_healthy_volumes().unwrap_or_default();
+    let volumes: Vec<crate::coordinator::metadata::VolumeMetadata> = state.objects.live_volumes();
     let total_keys: u64 = volumes.iter().map(|v| v.total_keys).sum();
     out += &format!("minikv_total_keys {{}} {}\n", total_keys);
     out += &format!("minikv_healthy_volumes {{}} {}\n", volumes.len());
@@ -927,10 +1034,15 @@ pub async fn metrics(State(state): State<CoordState>) -> impl IntoResponse {
         "follower"
     };
     out += &format!("minikv_raft_role {{}} \"{}\"\n", role);
+    out += &format!("minikv_raft_term {{}} {}\n", state.raft.get_term());
+    out += &format!(
+        "minikv_raft_commit_index {{}} {}\n",
+        state.raft.commit_index()
+    );
 
     out += &crate::common::METRICS.to_prometheus();
 
-    let s3_objects = 0;
+    let s3_objects = state.metadata.list_keys().map(|k| k.len()).unwrap_or(0);
     let s3_objects_with_ttl = 0;
     out += &format!("minikv_s3_objects_total {{}} {}\n", s3_objects);
     out += &format!("minikv_s3_objects_with_ttl {{}} {}\n", s3_objects_with_ttl);
@@ -952,53 +1064,6 @@ async fn health(State(state): State<CoordState>) -> impl IntoResponse {
         "is_leader": state.raft.is_leader(),
         "version": env!("CARGO_PKG_VERSION"),
     }))
-}
-
-#[allow(dead_code)]
-/// 1. Prepare phase: ask all target volumes to prepare the write.
-/// 2. Commit phase: if all volumes are prepared, commit the write; otherwise, abort.
-async fn put_key(
-    State(state): State<CoordState>,
-    Path(key): Path<String>,
-    _body: Bytes,
-) -> impl IntoResponse {
-    let placement = state.placement.lock().unwrap();
-    let volumes = state.metadata.get_healthy_volumes().unwrap_or_default();
-    let target_volumes: Vec<String> = placement.select_volumes(&key, &volumes).unwrap_or_default();
-
-    let mut prepare_ok = true;
-    for _volume_id in &target_volumes {
-        let simulated_prepare = true;
-        if !simulated_prepare {
-            prepare_ok = false;
-            break;
-        }
-    }
-
-    if !prepare_ok {
-        for _volume_id in &target_volumes {}
-        return (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("PUT {} failed: prepare phase error (2PC)", key),
-        );
-    }
-
-    for _volume_id in &target_volumes {}
-
-    (StatusCode::OK, format!("PUT {} committed via 2PC", key))
-}
-
-#[allow(dead_code)]
-async fn get_key(State(_state): State<CoordState>, Path(key): Path<String>) -> impl IntoResponse {
-    let value = format!("Value for key {} (fetched from volume)", key);
-    (StatusCode::OK, value)
-}
-
-async fn delete_key(
-    State(_state): State<CoordState>,
-    Path(key): Path<String>,
-) -> impl IntoResponse {
-    (StatusCode::OK, format!("DELETE {} succeeded", key))
 }
 
 async fn admin_ui_handler() -> impl IntoResponse {

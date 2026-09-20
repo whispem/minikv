@@ -1,6 +1,6 @@
 [package]
 name = "minikv"
-version = "1.0.1"
+version = "2.0.0"
 edition = "2021"
 authors = ["Em' <whispem@users.noreply.github.com>"]
 description = "Distributed key-value store with Raft consensus, encryption at rest, and pluggable storage backends."

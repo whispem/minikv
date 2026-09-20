@@ -1,6 +1,6 @@
 # Contributing to minikv
 
-Thanks for contributing. This guide is aligned with the v1.0.0 GA workflow.
+Thanks for contributing. This guide is aligned with the v2.0.0 workflow.
 
 ## Ways to Contribute
 
@@ -13,19 +13,37 @@ Issues: https://github.com/whispem/minikv/issues
 
 ## Local Setup
 
+Prerequisites:
+
+- Rust 1.81 or newer
+- The Protocol Buffers compiler (`protoc`): `brew install protobuf` on macOS, `sudo apt-get install protobuf-compiler` on Debian/Ubuntu
+- A C/C++ toolchain, because RocksDB is built from source: Xcode Command Line Tools on macOS, `build-essential` and `clang` on Debian/Ubuntu
+
 ```bash
 git clone https://github.com/whispem/minikv
 cd minikv
 make build
 ```
 
-Recommended checks before opening a PR:
+Recommended checks before opening a PR, in the same order as CI:
 
 ```bash
-make test
-make fmt
-make clippy
-make release-preflight
+cargo fmt --all -- --check
+cargo clippy --all-targets --all-features -- -D warnings
+cargo build --release
+cargo test --release
+```
+
+The time-series integration tests expect a coordinator listening on port 8000, as in CI. Start one in a second terminal before `cargo test --release`, and stop it afterwards:
+
+```bash
+cargo run --release --bin minikv-coord -- serve --id 1
+```
+
+The `admin_status` test rewrites `config.toml`. Restore it before committing:
+
+```bash
+git restore config.toml
 ```
 
 ## Branch and Commit Workflow
@@ -63,6 +81,12 @@ Minimum for most PRs:
 cargo test --lib
 ```
 
+Changes to Raft, the coordinator, the volume servers or the read/write path must also pass the end-to-end cluster test. It starts 3 coordinators and 3 volumes, writes and reads through every node, kills the leader and restarts it:
+
+```bash
+cargo test --release --test distributed_cluster -- --nocapture
+```
+
 For API, storage, replication, or release-impacting changes, run:
 
 ```bash
@@ -94,6 +118,11 @@ Key files:
 
 ## Current Priority Areas
 
+- Enforcing authentication, RBAC, quotas and encryption on the HTTP API
+- Raft log compaction and snapshots
+- Automatic re-replication when a volume is lost
+- Write forwarding from followers to the leader
+- Background compaction and cluster verify/repair tooling
 - CDC integrations (Kafka Connect templates)
 - Read replicas for analytics traffic
 - Vector indexing acceleration (HNSW/PQ)

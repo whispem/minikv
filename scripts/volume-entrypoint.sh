@@ -9,4 +9,5 @@ exec minikv-volume serve \
   --grpc "${GRPC_BIND}" \
   --data "${DATA_PATH}" \
   --wal "${WAL_PATH}" \
-  --coordinators "${COORDINATORS}"
+  --coordinators "${COORDINATORS}" \
+  ${ADVERTISE:+--advertise "$ADVERTISE"}

@@ -50,6 +50,19 @@ impl PlacementManager {
         Ok(selected)
     }
 
+    pub fn replicas(&self) -> usize {
+        self.replicas
+    }
+
+    pub fn select_available(&self, key: &str, volumes: &[VolumeMetadata]) -> Vec<String> {
+        let healthy: Vec<String> = volumes
+            .iter()
+            .filter(|v| v.state.is_healthy())
+            .map(|v| v.volume_id.clone())
+            .collect();
+        select_replicas(key, &healthy, self.replicas.min(healthy.len()))
+    }
+
     pub fn get_shard(&self, key: &str) -> u64 {
         shard_key(key, self.num_shards)
     }
@@ -114,6 +127,22 @@ mod tests {
 
         let result = manager.select_volumes("test-key", &volumes);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_select_available_degrades_to_live_volumes() {
+        let manager = PlacementManager::new(256, 3);
+
+        let volumes = vec![
+            mock_volume("vol-1", NodeState::Alive),
+            mock_volume("vol-2", NodeState::Dead),
+            mock_volume("vol-3", NodeState::Alive),
+        ];
+
+        let selected = manager.select_available("test-key", &volumes);
+        assert_eq!(selected.len(), 2);
+        assert!(!selected.contains(&"vol-2".to_string()));
+        assert_eq!(selected, manager.select_available("test-key", &volumes));
     }
 
     #[test]

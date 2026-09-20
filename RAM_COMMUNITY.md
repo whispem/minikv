@@ -28,17 +28,21 @@ RAM brings together people who want to learn, build, and share Rust — whether 
 
 ## Our Community
 
-**85 members** on Discord
-**139 followers** on LinkedIn
-- Grew from scratch in just a single month — and you're welcome to help us grow even more!
+**90 members** on Discord
+**180 followers** on LinkedIn
+- Founded in December 2025, and you're welcome to help us grow even more!
 
 
 
 ## Meetups & Events
 
 RAM organizes:
-- **Online events:** The very first meetup was on January 14, 8:30PM CET
-- **IRL get-togethers:** Future events will also take place physically in Aix-en-Provence, Marseille, and the surrounding area for those who love face-to-face connections and local networking.
+- **Online events:** our first meetup took place on Discord on January 14, 2026
+- **IRL get-togethers:** events will also take place physically in Aix-en-Provence, Marseille, and the surrounding area for those who love face-to-face connections and local networking.
+
+**Coming next:** we're relaunching the meetups, online and in person. Want to give a talk, show a project, or help organize? Say hi on Discord!
+
+RAM was also presented to the students of Epitech Marseille, during a talk about learning Rust.
 
 **What you’ll find:**
 - Tech talks & lightning talks (beginner and advanced)

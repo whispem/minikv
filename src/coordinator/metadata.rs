@@ -26,6 +26,7 @@ const CF_CONFIG: &str = "config";
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KeyMetadata {
     pub key: String,
+    pub blob_id: String,
     pub replicas: Vec<String>,
     pub size: u64,
     pub blake3: String,
@@ -187,6 +188,7 @@ mod tests {
 
         let meta = KeyMetadata {
             key: "test-key".to_string(),
+            blob_id: "test-key#1".to_string(),
             replicas: vec!["vol-1".to_string(), "vol-2".to_string()],
             size: 1024,
             blake3: "abc123".to_string(),

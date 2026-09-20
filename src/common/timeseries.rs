@@ -578,7 +578,7 @@ impl TimeseriesEngine {
         let mut data = self.data.write().unwrap();
         let mut deleted = 0u64;
 
-        for (_, buckets) in data.iter_mut() {
+        for buckets in data.values_mut() {
             let old_keys: Vec<i64> = buckets.range(..cutoff_ts).map(|(k, _)| *k).collect();
 
             for key in old_keys {
@@ -601,7 +601,7 @@ impl TimeseriesEngine {
 
             let data = self.data.read().unwrap();
 
-            for (_series_key, buckets) in data.iter() {
+            for buckets in data.values() {
                 for (_bucket_ts, block) in buckets.range(..cutoff_ts) {
                     if block.count > 1 {
                         downsampled += block.count as u64;
@@ -620,9 +620,9 @@ impl TimeseriesEngine {
         let mut total_points = 0;
         let mut total_bytes = 0;
 
-        for (_, buckets) in data.iter() {
+        for buckets in data.values() {
             total_series += 1;
-            for (_, block) in buckets.iter() {
+            for block in buckets.values() {
                 total_points += block.count;
                 total_bytes += block.data.len();
             }

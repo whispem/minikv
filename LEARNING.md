@@ -39,7 +39,12 @@ What do computers do with memory and files? How do real systems work?
 - **Started Rust:** October 27, 2025 (at 00:27 UTC+1 I ran my first "Hello World" in Rust)
 - **Shipped mini-kvstore-v2:** November 21, 2025
 - **Released minikv (distributed):** December 2025 (`v0.3.0` on December 22, then `v0.4.0` on December 31 with the first real admin dashboard and S3 API)
+- **Founded Rust Aix-Marseille (RAM):** December 2025, with our first online meetup on January 14, 2026
+- **Started Whispem, my own programming language:** January 28, 2026
 - **Started Data Science program at AMSE:** April 2, 2026 (Aix-Marseille School of Economics)
+- **Released minikv v1.0.0:** April 8, 2026
+- **Earned my DESU in Data Science at AMSE:** summer 2026
+- **Released minikv v2.0.0:** September 2026, with a reworked distributed layer
 
 After hearing:
 - “Rust is way too hard.”
@@ -96,21 +101,21 @@ I had no formal tech background, but I wanted to understand how systems worked a
 
 ---
 
-## About minikv: What It Can Do (as of v1.0.0)
+## About minikv: What It Can Do (as of v2.0.0)
 
 **Distributed Core:**
-- Multi-node Raft consensus (leader election, log replication, snapshots, recovery, partition detection)
-- Advanced Two-Phase Commit (2PC) for distributed writes: chunked transfers, error handling, retries, timeouts
-- Configurable N-way replication (default: 3 replicas)
-- High Random Weight (HRW) placement for even distribution
-- 256 virtual shards for horizontal scaling
-- Automatic cluster rebalancing (load detection, blob migration, metadata updates)
-- Range queries (efficient key scans)
-- Batch operations API (multi-put/get/delete)
+- Multi-node Raft consensus: leader election with log up-to-date checks, persistent log and term, majority commit, leader step-down when the quorum is lost
+- Linearizable reads on every coordinator (ReadIndex)
+- Two-Phase Commit (2PC) between the leader and the volume servers: size and BLAKE3 checks at prepare, commit or rollback on every replica
+- Configurable N-way replication (default: 3 replicas), with one blob per object version
+- Highest Random Weight (HRW) placement across volume servers
+- Automatic failover: the remaining coordinators elect a new leader within about a second
+- Volume servers that register themselves through heartbeats
+- Range queries and batch operations
 - TLS encryption for HTTP and gRPC
 - Flexible configuration: file, env, CLI override
-- Admin dashboard endpoint (`/admin/status`) for cluster monitoring
-- S3-compatible API (PUT/GET, in-memory and persistent backends)
+- Admin status endpoint (`/admin/status`): role, term, leader, commit index, volumes
+- S3-compatible API (PUT/GET/DELETE)
 - Watch/subscribe system (WebSocket and SSE) for real-time key change notifications
 
 **Time Series and Vectors:**
@@ -123,29 +128,29 @@ I had no formal tech background, but I wanted to understand how systems worked a
 - Segmented, append-only log structure
 - In-memory HashMap indexing for O(1) key lookups
 - Bloom filters for fast negative queries
-- Instant index snapshots (5ms restarts)
+- Index snapshots
 - CRC32 checksums on every record
-- Automatic background compaction and space reclamation
-- Persistent storage backends: RocksDB, Sled, in-memory (configurable)
+- Compaction with space reclamation
+- RocksDB for coordinator metadata
 
-**Security & Multi-Tenancy:**
+**Security & Multi-Tenancy building blocks** (implemented and tested as modules; enforcement on the HTTP API is on the roadmap):
 - API Key authentication (Argon2)
 - JWT token support
 - Role-Based Access Control (Admin/ReadWrite/ReadOnly)
-- Multi-tenant data isolation
-- AES-256-GCM encryption at rest
+- AES-256-GCM encryption
 - Per-tenant quotas (storage, objects, rate limits)
-- Audit logging for all admin and data modification events
+- Audit logging for admin operations
 
 **Durability:**
 - Write-Ahead Log (WAL) for safety
 - Configurable fsync policy (always, interval, never)
 - Fast crash recovery via WAL replay
+- Raft log and term persisted with CRC32 checksums and fsync
 
 **APIs:**
-- gRPC for internal communication (coordinator <-> volume)
+- gRPC for internal communication (Raft between coordinators, 2PC with volumes)
 - HTTP REST API for clients
-- CLI for cluster ops (verify, repair, compact, rebalance, batch, range)
+- CLI for put/get/delete
 - WebSocket & SSE endpoints for real-time notifications
 
 **Infrastructure and Operations:**
@@ -159,9 +164,21 @@ I had no formal tech background, but I wanted to understand how systems worked a
 - Backup and restore runbook for operations
 
 **Testing and Quality:**
+- End-to-end cluster test: 3 coordinators and 3 volumes, leader failover and restart
+- Unit tests for Raft (votes, log conflicts, persistence), the 2PC staging, and placement
 - Integration, stress, and recovery tests
 - Release preflight checks (fmt, clippy, build, tests)
 - All code, scripts, and docs in English
+
+---
+
+## Beyond minikv
+
+- **Whispem:** a programming language whose compiler is written in Whispem and recompiles itself to a fixed point, running on a standalone C VM
+- **learn-assembly-with-em:** x86-64 assembly from a 512-byte boot sector to miniasm, a small assembler that matches NASM's output on its subset
+- **asm.fm:** a synthesizer written in pure x86-64 assembly, from raw waveforms to FM bells and a resonant filter
+- **sussurro.cpp:** offline neural translation (English, Spanish, French, Italian) in C++ on ggml
+- **dprism:** a data explorer that lives in the terminal
 
 ---
 
@@ -169,12 +186,17 @@ I had no formal tech background, but I wanted to understand how systems worked a
 
 - Learned the fundamentals of Rust: ownership, lifetimes, async/await
 - Built a distributed storage engine with Raft, WAL, and 2PC
-- Added API Key/JWT authentication, RBAC, quotas, and audit logging
+- Added API Key/JWT authentication, RBAC, quotas, and audit logging building blocks
 - Implemented a real-time notification system (watch/subscribe via WebSocket and SSE) for key changes
-- Integrated persistent storage backends (RocksDB, Sled)
 - Added time-series APIs and vector similarity search
 - Reached v1.0.0 with release engineering checks and updated documentation
-- Started a Data Science program at AMSE (Aix-Marseille School of Economics) on April 2, 2026
+- Reached v2.0.0: persistent Raft, 2PC with volume servers, linearizable reads, and an end-to-end failover test
+- minikv passed 400 stars on GitHub
+- Founded Rust Aix-Marseille (RAM), a Rust community open to every level
+- Gave my first talk at Epitech Marseille, about my journey into tech and Rust
+- minikv was featured in Programmez!, followed by a live talk at the Programmez! Meetup and a guest editorial
+- Built Whispem, my own programming language
+- Started a Data Science program at AMSE (Aix-Marseille School of Economics) on April 2, 2026, and earned my DESU in Data Science in summer 2026
 
 ---
 
@@ -182,6 +204,6 @@ I had no formal tech background, but I wanted to understand how systems worked a
 
 > “If you can read and express an idea, you can code. Patience, curiosity, and a love of learning are everything!”
 
-*Written by Em' (@whispem), Rust beginner, learning by building, including distributed key-value systems.*
+*Written by Em' (@whispem), Rust developer, learning by building, including distributed key-value systems.*
 
 *"Structure determines meaning. You learn by writing and by building."*

@@ -56,7 +56,13 @@ async fn main() -> anyhow::Result<()> {
             peers,
             replicas,
         } => {
-            let config = minikv::common::config::Config::load();
+            let file_config = match minikv::common::config::Config::try_load() {
+                Ok(config) => config.coordinator,
+                Err(e) => {
+                    tracing::info!("No usable config.toml ({}), using command line flags", e);
+                    None
+                }
+            };
             let bind_addr = bind.parse()?;
             let grpc_addr = grpc.parse()?;
             let db_path = db;
@@ -68,7 +74,7 @@ async fn main() -> anyhow::Result<()> {
                 replicas,
                 ..Default::default()
             };
-            if let Some(file_conf) = config.coordinator {
+            if let Some(file_conf) = file_config {
                 let bind_addr = file_conf.bind_addr;
                 let grpc_addr = file_conf.grpc_addr;
                 let db_path = file_conf.db_path.clone();

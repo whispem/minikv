@@ -7,9 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [2.0.0] - 2026-09-20
 
-- No unreleased entries yet.
+### Changed
+- Reworked the distributed layer: coordinators replicate metadata through a persistent Raft log (log up-to-date checks on elections, majority commit, leader step-down when the quorum is lost)
+- Writes use two-phase commit between the leader coordinator and the volume servers; each object version gets its own blob, and older versions are cleaned up after the switch
+- Reads are linearizable on every coordinator (ReadIndex)
+- `minikv-volume serve` runs a gRPC storage service, a `/health` endpoint and heartbeats to every coordinator
+- **BREAKING:** `--coordinators` is required and should list every coordinator
+- **BREAKING:** batch `get` returns the stored value instead of the key metadata
+- **BREAKING:** public Rust API: `KeyMetadata` has a new `blob_id` field, `VolumeServer::open(VolumeServerConfig)` replaces `VolumeServer::new`, `VolumeClient::prepare` takes the payload, and the unused `RaftNode` snapshot and election helpers were removed
+- **BREAKING:** coordinator data directories from 1.x are not compatible; start with fresh ones
+
+### Added
+- `DELETE /s3/:bucket/:key` and `GET` / `PUT` / `POST` / `DELETE /:key`, used by the `minikv` CLI
+- `POST /internal/volumes/heartbeat`
+- `/admin/status` reports the term, leader, commit index and log length
+- End-to-end test with 3 coordinators and 3 volumes, including leader failover
+
+### Fixed
+- The coordinator starts without a `config.toml`
+- Peer ports and coordinator list in `docker-compose.yml`
 
 ---
 
