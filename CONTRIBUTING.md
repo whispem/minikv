@@ -114,7 +114,7 @@ Key files:
 - `README.md`
 - `CHANGELOG.md`
 - `docs/ops-backup-restore.md`
-- `docs/release-engineering-v1.0.0.md`
+- `docs/release-engineering-v2.0.0.md`
 
 ## Current Priority Areas
 

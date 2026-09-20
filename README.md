@@ -36,8 +36,8 @@ The v1.0.0 features (time-series API, vector search, Python SDK, Helm chart) are
 minikv is a distributed systems reference implementation and an extensible data platform.
 
 - Strong consistency: Raft-replicated metadata, two-phase commit to the volume servers, linearizable reads.
-- Durability: WAL and pluggable storage backends.
-- Multi-tenancy and security: RBAC, API keys/JWT, encryption at rest.
+- Durability: write-ahead logs, checksummed segments, persistent Raft log.
+- Security building blocks: API keys/JWT, RBAC, quotas, encryption.
 - Real-time and analytics pathways: watch/SSE and time-series APIs.
 
 ## How it works
@@ -118,23 +118,25 @@ Distribution and consistency:
 - Raft consensus: leader election, persistent log replication, majority commit
 - Two-phase commit between coordinators and volume servers, with replicated blobs checked by BLAKE3
 - Linearizable reads on every coordinator (ReadIndex)
-- 256 virtual shards and placement management
-- Multi-key operations and transaction endpoints
+- Rendezvous hashing (HRW) placement across volume servers
+- Batch and range endpoints
 - Cross-DC replication primitives and conflict policies
 
 Storage and query paths:
 
-- Pluggable backends: RocksDB, Sled, in-memory
-- WAL, compaction, and integrity tooling
+- Volume storage engine: append-only segments, WAL, CRC32 checksums, bloom filters, index snapshots
+- RocksDB for coordinator metadata
 - Time-series engine with aggregation and downsampling
 - Vector similarity endpoints with cosine top-k search
 
-Security and tenancy:
+Security and tenancy building blocks:
 
 - API keys (Argon2), JWT, RBAC
-- AES-256-GCM encryption at rest
+- AES-256-GCM encryption
 - Tenant quotas and request rate limiting
-- Audit logging
+- Audit logging for admin operations
+
+These modules are implemented and tested on their own. Enforcing them on the HTTP API is planned for v2.1.0.
 
 APIs:
 
@@ -158,7 +160,7 @@ Kubernetes:
 Runbooks:
 
 - Backup/restore: `docs/ops-backup-restore.md`
-- Release process: `docs/release-engineering-v1.0.0.md`
+- Release process: `docs/release-engineering-v2.0.0.md`
 
 Preflight commands:
 
@@ -171,9 +173,11 @@ make release-preflight-full
 
 v2.1.0:
 
+- Authentication, RBAC, quotas and encryption enforced on the HTTP API
 - Raft log compaction and snapshots
 - Automatic re-replication when a volume is lost
 - Write forwarding from followers to the leader
+- Background compaction and cluster verify/repair tooling
 - Kafka Connect sink/source templates for CDC
 - Read replicas for analytical traffic
 - Vector index acceleration (HNSW/PQ)
@@ -182,6 +186,7 @@ v2.1.0:
 v2.2.0:
 
 - Dynamic cluster membership (adding and removing coordinators)
+- Virtual shards driving placement and rebalancing
 - Distributed transactions scope expansion
 - Multi-region active-passive with explicit failover
 - Point-in-time recovery (PITR)
@@ -201,7 +206,6 @@ make build
 make test
 make fmt
 make clippy
-make verify
 ```
 
 End-to-end cluster test (3 coordinators, 3 volumes, leader failover):

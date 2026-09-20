@@ -1,223 +1,288 @@
-# Professional Test Scenarios - minikv v1.0.0
+# Test Scenarios - minikv v2.0.0
 
-This document defines manual validation scenarios for minikv v1.0.0.
-Each scenario includes context, steps, and success criteria.
+This document defines manual validation scenarios for minikv v2.0.0. Each scenario gives its context, its steps, its success criteria, and the automated test that covers it when there is one.
 
-## 0. Kubernetes Operator and Cloud-Native Deployment
+Unless a scenario says otherwise, start a local cluster with:
 
-Context: Validate CRD lifecycle, reconciliation, RBAC, StatefulSet behavior, and scaling.
+```bash
+make serve
+```
+
+It runs 3 coordinators (HTTP on 5000, 5002, 5004) and 3 volumes (HTTP on 6000, 6002, 6004). On a coordinator, `GET /admin/status` reports its role, term, leader, commit index, applied index, log length, and the volumes it considers live.
+
+The whole distributed path replays in one command:
+
+```bash
+make smoke
+```
+
+## 1. Distributed Write Path
+
+Automated: `tests/distributed_cluster.rs`, with real processes.
+
+Context: a write goes through the leader, reaches every replica, and becomes visible on every coordinator.
 
 Steps:
-1. Deploy CRD and operator manifests.
-2. Apply basic and production cluster examples.
-3. Verify StatefulSet, Services, ConfigMaps, RBAC, and monitoring resources.
-4. Scale up and down.
-5. Delete and recreate the cluster resource.
+1. Read `GET /admin/status` on 5000, 5002 and 5004 to find the leader.
+2. `PUT /s3/demo/hello.txt` on the leader.
+3. Read `GET /health` on the three volumes and compare `total_keys`.
+4. `GET /s3/demo/hello.txt` on each coordinator.
 
 Success criteria:
-- Resources are created and reconciled correctly.
-- Scaling works without orphaned resources.
-- RBAC is enforced.
-- Cluster returns to healthy state after recreation.
+- The write answers `200` on the leader.
+- The object lands on 3 volumes.
+- Every coordinator returns the value right after the write, with no retry.
 
-## 1. Time-Series Engine
+## 2. Leader Redirect
 
-Context: Validate ingest and query workflows.
+Automated: `tests/distributed_cluster.rs`.
+
+Context: a follower refuses writes and names the leader.
 
 Steps:
-1. Start coordinator and volumes.
-2. Write samples with `POST /ts/write`.
-3. Query with `POST /ts/query` using filters and time windows.
-4. Verify aggregation behavior.
+1. Send `PUT /s3/demo/hello.txt` to a coordinator that is not the leader.
+2. Read the status code and the `x-minikv-leader` header.
+3. Check the volumes' `total_keys`.
+
+Success criteria:
+- The follower answers `503`.
+- The header carries the leader's address.
+- Nothing was written on the volumes.
+
+## 3. Leader Failover
+
+Automated: `tests/distributed_cluster.rs`.
+
+Context: the cluster elects a new leader when the current one disappears.
+
+Steps:
+1. Note the current term with `GET /admin/status`.
+2. Kill the leader: `lsof -ti tcp:<leader port> -sTCP:LISTEN | xargs kill`.
+3. Poll `GET /admin/status` on the two remaining coordinators.
+4. Write a new object on the new leader, then read it back.
+
+Success criteria:
+- A new leader appears in about a second, with a higher term.
+- Writes work again on the new leader.
+- Objects written before the failure are still readable.
+
+## 4. Coordinator Restart and Catch-Up
+
+Automated: `tests/distributed_cluster.rs`.
+
+Context: a coordinator that was down rejoins and replays what it missed.
+
+Steps:
+1. Stop one coordinator, then write two or three objects through the leader.
+2. Restart the stopped coordinator with the same `--db` directory.
+3. Poll its `GET /admin/status` until `last_applied` matches the leader's `commit_index`.
+4. Read the objects written during the outage from that coordinator.
+
+Success criteria:
+- The restarted node recovers its term and its log from disk.
+- It catches up without a manual step.
+- Its reads return the same values as the leader's.
+
+## 5. Overwrite and Blob Cleanup
+
+Automated: `tests/distributed_cluster.rs`.
+
+Context: each version of an object gets its own blob, and the old one is removed.
+
+Steps:
+1. `PUT` an object, then read `total_keys` on each volume.
+2. `PUT` the same key with a different body.
+3. Read the object from every coordinator.
+4. Read `total_keys` again on each volume.
+
+Success criteria:
+- Every coordinator returns the new value.
+- The key count comes back to its previous level once the old blob is deleted.
+
+## 6. Delete Propagation
+
+Automated: `tests/distributed_cluster.rs`.
+
+Context: a delete is replicated and the blobs are removed.
+
+Steps:
+1. `DELETE /s3/demo/hello.txt` on the leader.
+2. `GET` the same key on all three coordinators.
+3. Check `total_keys` on the volumes.
+
+Success criteria:
+- The delete answers `204`.
+- Every coordinator answers `404`.
+- The blobs are gone from the volumes.
+
+## 7. Volume Loss and Degraded Reads
+
+Automated: `tests/distributed_cluster.rs` (it kills 2 of the 3 volumes).
+
+Context: reads survive as long as one replica holds the blob.
+
+Steps:
+1. Write an object with 3 replicas.
+2. Stop one volume, then a second one.
+3. Read the object from every coordinator.
+4. Read `GET /admin/status`: the dead volumes leave the live list after 5 seconds without a heartbeat.
+5. Restart the volumes.
+
+Success criteria:
+- Reads keep working on the surviving replica, with the BLAKE3 hash checked.
+- The status endpoint reflects the live volumes.
+- A restarted volume registers itself again through its heartbeat.
+
+Known limitation: minikv does not re-replicate a lost blob. Re-replication is on the v2.1.0 roadmap.
+
+## 8. Raft State Machine
+
+Automated: unit tests in `src/coordinator/raft_node.rs` and `src/coordinator/raft_storage.rs`, plus `tests/raft_cluster.rs`, `tests/node_failure.rs` and `tests/split_brain.rs`. These four run in a single process, without the network: they exercise the state machine, not a live cluster. A live cluster is `tests/distributed_cluster.rs`.
+
+Context: votes, log conflicts and persistence behave as the Raft paper describes.
+
+Steps:
+1. `cargo test --lib coordinator::raft`
+2. `cargo test --test raft_cluster --test node_failure --test split_brain`
+
+Success criteria:
+- A vote is refused to a candidate whose log is behind.
+- A conflicting entry is replaced and applied once.
+- A follower refuses stale terms and gaps.
+- A reopened log recovers its term and drops a torn tail.
+
+## 9. Durability After a Crash
+
+Automated: `tests/recovery.rs` and `tests/integration.rs`, at the storage-engine level.
+
+Context: a volume recovers its data after an abrupt stop.
+
+Steps:
+1. Write keys through a `BlobStore`, or through the cluster.
+2. Stop the volume without a clean shutdown.
+3. Restart it and read the keys back.
+
+Success criteria:
+- The WAL is replayed and the keys are readable.
+- CRC32 checks pass on every record.
+- A partially written record at the end of the log is dropped rather than read.
+
+Known limitation: a key deleted before a restart comes back in the volume's index. Versioned blobs keep this invisible to clients, but it wastes space.
+
+## 10. S3-Compatible API
+
+Automated: `tests/s3_api.rs` and `tests/s3_api_extra.rs`, with real processes.
+
+Context: the S3 routes behave like the plain key routes.
+
+Steps:
+1. `PUT /s3/<bucket>/<key>` with a binary body.
+2. `GET` it back and compare the bytes.
+3. `GET` a key that does not exist.
+4. Overwrite a key, then write several objects in the same bucket.
+
+Success criteria:
+- The bytes come back unchanged.
+- A missing key answers `404`.
+- Overwrites and multiple objects behave as expected.
+
+## 11. Time-Series Engine
+
+Automated: `tests/timeseries_integration.rs`, against a coordinator on port 8000.
+
+Context: ingest and query workflows.
+
+Steps:
+1. Write samples with `POST /ts/write`.
+2. Query with `POST /ts/query`, with filters and a time window.
+3. Check aggregation and downsampling behavior.
+4. Read `GET /admin/timeseries/stats`.
 
 Success criteria:
 - Samples are persisted and queryable.
-- Aggregation and filters return expected results.
+- Filters and aggregations return the expected values.
 
-## 2. Vector Similarity Search
+## 12. Vector Similarity Search
 
-Context: Validate vector indexing and nearest-neighbor retrieval.
+Manual.
+
+Context: vector indexing and nearest-neighbor retrieval.
 
 Steps:
 1. Upsert vectors with `POST /vector/upsert`.
 2. Query neighbors with `POST /vector/query`.
-3. Check index stats with `GET /admin/vector/stats`.
-4. Restart coordinator and verify results again.
+3. Check `GET /admin/vector/stats`.
+4. Restart the coordinator and query again.
 
 Success criteria:
 - Upserted vectors are returned by similarity queries.
-- `top_k` behavior is respected.
-- Index remains usable after restart.
+- `top_k` is respected.
+- The index is still usable after a restart.
 
-## 3. Geo-Partitioning
+## 13. Watch and Subscribe Notifications
 
-Context: Validate routing across regions.
+Manual.
 
-Steps:
-1. Configure multiple regions.
-2. Test latency, geo, round-robin, and primary routing strategies.
-3. Simulate a regional outage and verify fallback.
-4. Validate geo-fencing where configured.
-
-Success criteria:
-- Requests follow configured strategy.
-- Failover is deterministic and safe.
-- Geo-fencing rules are respected.
-
-## 4. Data Tiering
-
-Context: Validate movement across hot, warm, cold, and archive tiers.
+Context: real-time change propagation.
 
 Steps:
-1. Start with tiering enabled.
-2. Insert data with varied access patterns.
-3. Trigger or wait for policy evaluation.
-4. Verify tier transitions and reads.
+1. Open a WebSocket subscription (`/watch/ws`) and an SSE one (`/watch/sse`).
+2. Trigger put and delete operations.
+3. Check the payload format and the ordering.
 
 Success criteria:
-- Tier transitions follow policy.
-- Data remains readable after movement.
+- Subscribers receive the expected events promptly.
+- No systematic duplicates and no missed events.
 
-## 5. io_uring Mode (Linux)
+## 14. Load
 
-Context: Validate io_uring path and fallback behavior.
+Automated: `tests/stress.rs`, at the storage-engine level (1000 writes and reads in one process).
+
+Context: sustained load behavior.
 
 Steps:
-1. Run on Linux with io_uring enabled.
-2. Execute sustained read/write load.
-3. Observe batching and throughput metrics.
-4. Disable io_uring and verify fallback.
+1. `cargo test --release --test stress`
+2. For HTTP load, start a cluster and watch `GET /metrics` while a client writes and reads.
 
 Success criteria:
-- io_uring is active when available.
-- Service remains functional on fallback.
+- No crash loop, no unbounded memory growth.
+- Latency and error counters stay stable in `/metrics`.
 
-## 6. Node Failure
+Known limitation: the k6 scenarios under `bench/` were written for the v1 API. They do not look for the leader and they count a `501` as a success, so they need an update before their numbers mean anything.
 
-Context: Validate availability during a volume outage.
+## 15. Kubernetes Deployment
+
+Manual, manifests only.
+
+Context: deploy a cluster from the manifests under `k8s/`.
 
 Steps:
-1. Start cluster (coordinator + 3 volumes).
-2. Insert dataset.
-3. Stop one volume.
-4. Check `GET /health/live`, `GET /health/ready`, and `GET /metrics`.
-5. Run reads and writes.
-6. Restart failed volume.
+1. Apply the CRD and the examples under `k8s/examples/`.
+2. Deploy the Helm chart from `k8s/helm/minikv/` with the dev values.
+3. Check Services, ConfigMaps, RBAC and the monitoring resources.
+4. Scale the volume workload up and down.
 
 Success criteria:
-- Cluster remains available with degraded capacity.
-- Recovered volume rejoins and catches up.
+- Pods reach a ready state and coordinators elect a leader.
+- Volumes register themselves with every coordinator.
 
-## 7. Split-Brain Resistance
+Known limitation: no operator process is shipped. `MiniKVClusterSpec` and `MiniKVController` in `src/common/k8s_operator.rs` are a modeled reconciliation loop with unit tests, not a running controller, so nothing reconciles the CRD on its own.
 
-Context: Validate consistency under network partition.
+## Modules Not Yet Enforced on the HTTP API
 
-Steps:
-1. Start cluster.
-2. Partition connectivity between node groups.
-3. Execute reads and writes in both partitions.
-4. Observe leadership and replication.
-5. Heal partition and validate convergence.
+These are implemented and covered by their own unit tests, but the HTTP API does not apply them yet. Validate them with `cargo test --lib` rather than through the API, and treat any end-to-end scenario for them as a v2.1.0 item:
 
-Success criteria:
-- Single-leader safety is preserved.
-- Cluster converges after healing.
-
-## 8. Recovery After Failure
-
-Context: Validate restart recovery for coordinator and volumes.
-
-Steps:
-1. Insert data.
-2. Stop coordinator.
-3. Validate expected client impact.
-4. Restart coordinator.
-5. Re-validate reads and writes.
-
-Success criteria:
-- Services recover cleanly.
-- Data remains intact.
-
-## 9. Stress and Load
-
-Context: Validate sustained load behavior.
-
-Steps:
-1. Start cluster.
-2. Run `bench/run_all.sh`.
-3. Observe latency, throughput, and errors in `GET /metrics`.
-4. Confirm no crash loops.
-
-Success criteria:
-- Cluster handles target load without instability.
-
-## 10. Consistency Verification
-
-Context: Validate replicated state after mixed operations.
-
-Steps:
-1. Insert deterministic key-value sets.
-2. Execute update and delete operations.
-3. Compare observed state across nodes.
-4. Verify Raft replication alignment.
-
-Success criteria:
-- Final values are consistent across replicas.
-
-## 11. Compaction and Repair Safety
-
-Context: Validate admin operations under live traffic.
-
-Steps:
-1. Populate dataset.
-2. Run `POST /admin/compact`.
-3. Run `POST /admin/repair`.
-4. Validate availability and data consistency.
-
-Success criteria:
-- No data loss.
-- Cluster remains operational.
-
-## 12. Audit Logging
-
-Context: Validate traceability of sensitive actions.
-
-Steps:
-1. Ensure audit logging is enabled.
-2. Perform admin actions and data operations.
-3. Inspect audit outputs.
-
-Success criteria:
-- Sensitive actions are recorded with actor, target, and timestamp.
-
-## 13. Persistent Storage Backends
-
-Context: Validate durability with RocksDB or Sled.
-
-Steps:
-1. Configure backend.
-2. Insert data.
-3. Restart services.
-4. Re-validate data access.
-
-Success criteria:
-- Data survives restart with no corruption.
-
-## 14. Watch and Subscribe Notifications
-
-Context: Validate real-time change propagation.
-
-Steps:
-1. Open WebSocket (`/watch/ws`) and SSE (`/watch/sse`) subscriptions.
-2. Trigger put/delete operations.
-3. Validate payload format and ordering.
-
-Success criteria:
-- Subscribers receive expected events promptly.
-- No systematic duplicates or missed events.
+- Authentication (API keys with Argon2, JWT) and RBAC
+- Tenant quotas and request rate limiting
+- AES-256-GCM encryption
+- Audit logging
+- Geo-partitioning: `GET /admin/geo/status` answers `enabled: false`
+- Data tiering and io_uring
+- `POST /admin/compact`, `POST /admin/repair` and `POST /admin/verify`, which call the placeholder tooling in `src/ops/`
 
 ## Execution Notes
 
-- Record commands, timestamps, and environment.
-- Capture logs and metrics for failures.
+- Record the commands, the timestamps and the environment.
+- Capture logs (`./data/*.log` when the cluster comes from `make serve`) and `/metrics` output for any failure.
 - Store outcomes in `tests/RESULT_TEMPLATE.md`.
+- The `admin_status` test rewrites `config.toml`. Run `git restore config.toml` afterwards.
