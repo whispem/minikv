@@ -30,6 +30,15 @@ impl Coordinator {
 
         let metadata = Arc::new(MetadataStore::open(&self.config.db_path)?);
 
+        // The coordinator's other files live next to its metadata, so that
+        // coordinators started from the same directory do not share them.
+        if !crate::common::audit::set_audit_log_path(self.config.db_path.join("audit.log")) {
+            tracing::warn!("The audit log was already open: it stays where it is");
+        }
+        crate::coordinator::http::set_data_dir(&self.config.db_path);
+        // Starts the clock of `minikv_uptime_seconds`.
+        once_cell::sync::Lazy::force(&crate::common::METRICS);
+
         let placement = Arc::new(Mutex::new(PlacementManager::new(
             self.config.num_shards,
             self.config.replicas,

@@ -47,6 +47,8 @@ message RangeRequest {
 
 message RangeResponse {
   repeated string keys = 1;
+  // With include_values: the bincode-encoded metadata of each key (replicas,
+  // size, BLAKE3, timestamps), not the stored values.
   repeated bytes values = 2;
 }
 
@@ -146,7 +148,7 @@ message StatsRequest {}
 message StatsResponse {
   uint64 total_keys = 1;
   uint64 total_bytes = 2;
-  uint64 free_bytes = 3;
+  uint64 free_bytes = 3; // Not measured: always 0.
   repeated string shards = 4; // Reserved: always empty, volumes have no shards.
 }
 
@@ -222,7 +224,7 @@ message HeartbeatRequest {
   string volume_id = 1;
   uint64 total_keys = 2;
   uint64 total_bytes = 3;
-  uint64 free_bytes = 4;
+  uint64 free_bytes = 4; // Not measured: always 0.
 }
 
 message HeartbeatResponse {

@@ -8,9 +8,10 @@ use crate::common::auth::{Role, KEY_STORE};
 use crate::common::{AuditEventType, AUDIT_LOGGER};
 use async_stream::stream;
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
-use once_cell::sync::Lazy;
+use once_cell::sync::{Lazy, OnceCell};
 use std::collections::HashMap;
 use std::convert::Infallible;
+use std::path::{Path as FsPath, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::broadcast;
 
@@ -53,8 +54,28 @@ async fn handle_ws(mut socket: WebSocket) {
     }
 }
 
-const VECTOR_INDEX_PATH: &str = "./coord-data/vector_index.json";
+/// Where the vector index was kept before 2.0.1, relative to the working
+/// directory whatever `--db` said.
+const LEGACY_VECTOR_INDEX_PATH: &str = "./coord-data/vector_index.json";
+
+/// The directory where this API keeps its own files, set by [`set_data_dir`].
+static DATA_DIR: OnceCell<PathBuf> = OnceCell::new();
 static VECTOR_INDEX_LOADED: AtomicBool = AtomicBool::new(false);
+
+/// Keeps the files of the HTTP API (the vector index) in `dir`. The
+/// coordinator passes its `--db` directory. Without it, the vector index stays
+/// at its pre-2.0.1 place, `./coord-data/vector_index.json`. Returns `false`
+/// when a directory was already set.
+pub fn set_data_dir(dir: &FsPath) -> bool {
+    DATA_DIR.set(dir.to_path_buf()).is_ok()
+}
+
+fn vector_index_path() -> PathBuf {
+    match DATA_DIR.get() {
+        Some(dir) => dir.join("vector_index.json"),
+        None => PathBuf::from(LEGACY_VECTOR_INDEX_PATH),
+    }
+}
 
 static VECTOR_INDEX: Lazy<std::sync::RwLock<HashMap<String, VectorPoint>>> =
     Lazy::new(|| std::sync::RwLock::new(HashMap::new()));
@@ -87,9 +108,24 @@ fn load_vector_index_if_needed() -> Result<(), String> {
         return Ok(());
     }
 
-    let path = std::path::Path::new(VECTOR_INDEX_PATH);
-    if path.exists() {
-        let content = std::fs::read_to_string(path)
+    let path = vector_index_path();
+    let legacy = FsPath::new(LEGACY_VECTOR_INDEX_PATH);
+    // A coordinator upgraded from 2.0.0 finds its index at the old place; it
+    // is saved to the new one at the next upsert.
+    let source = if path.exists() {
+        Some(path.as_path())
+    } else if legacy.exists() {
+        tracing::info!(
+            "Loading the vector index from {}; it will be saved to {}",
+            legacy.display(),
+            path.display()
+        );
+        Some(legacy)
+    } else {
+        None
+    };
+    if let Some(source) = source {
+        let content = std::fs::read_to_string(source)
             .map_err(|e| format!("failed to read vector index: {}", e))?;
         let parsed: HashMap<String, VectorPoint> = serde_json::from_str(&content)
             .map_err(|e| format!("failed to parse vector index: {}", e))?;
@@ -102,7 +138,7 @@ fn load_vector_index_if_needed() -> Result<(), String> {
 }
 
 fn persist_vector_index() -> Result<(), String> {
-    let path = std::path::Path::new(VECTOR_INDEX_PATH);
+    let path = vector_index_path();
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
             .map_err(|e| format!("failed to create vector index directory: {}", e))?;
@@ -111,13 +147,17 @@ fn persist_vector_index() -> Result<(), String> {
     let index = VECTOR_INDEX.read().unwrap();
     let content = serde_json::to_string_pretty(&*index)
         .map_err(|e| format!("failed to serialize vector index: {}", e))?;
-    std::fs::write(path, content).map_err(|e| format!("failed to write vector index: {}", e))?;
+    std::fs::write(&path, content).map_err(|e| format!("failed to write vector index: {}", e))?;
 
     Ok(())
 }
 
 /// Header that asked for an expiration time. minikv does not implement TTLs.
 const TTL_HEADER: &str = "x-minikv-ttl";
+
+/// Actor of the audit entries written by this API: it does not authenticate
+/// its callers yet, so it cannot name them.
+const UNAUTHENTICATED: &str = "unauthenticated";
 
 /// Answers `501 Not Implemented` with the feature and the release planned for it.
 fn not_implemented(feature: NotImplemented) -> Response {
@@ -241,12 +281,11 @@ async fn admin_create_key(axum::Json(req): axum::Json<CreateKeyRequest>) -> impl
             };
             AUDIT_LOGGER.log_event(
                 AuditEventType::ApiKeyCreated,
-                req.name.clone(),
+                UNAUTHENTICATED,
                 Some(id.clone()),
                 format!(
-                    "API key created for tenant {} with role {:?}",
-                    req.tenant.clone(),
-                    role
+                    "API key {} created for tenant {} with role {:?}",
+                    req.name, req.tenant, role
                 ),
                 None,
             );
@@ -324,7 +363,7 @@ async fn admin_revoke_key(Path(key_id): Path<String>) -> impl IntoResponse {
         Ok(()) => {
             AUDIT_LOGGER.log_event(
                 AuditEventType::ApiKeyRevoked,
-                "admin",
+                UNAUTHENTICATED,
                 Some(key_id.clone()),
                 "API key revoked",
                 None,
@@ -354,7 +393,7 @@ async fn admin_delete_key(Path(key_id): Path<String>) -> impl IntoResponse {
         Ok(()) => {
             AUDIT_LOGGER.log_event(
                 AuditEventType::ApiKeyDeleted,
-                "admin",
+                UNAUTHENTICATED,
                 Some(key_id.clone()),
                 "API key deleted",
                 None,
@@ -655,6 +694,9 @@ async fn health_live() -> impl IntoResponse {
     )
 }
 
+/// The Raft state of this coordinator and what it sees of the cluster.
+/// `nb_s3_objects` counts every key of the metadata store, S3 or not; it is
+/// `null` when the store cannot be listed.
 async fn admin_status(State(state): State<CoordState>) -> impl IntoResponse {
     let role = match state.raft.get_role() {
         RaftRole::Leader => "Leader",
@@ -665,7 +707,13 @@ async fn admin_status(State(state): State<CoordState>) -> impl IntoResponse {
     let volumes = state.objects.live_volumes();
     let nb_volumes = volumes.len();
     let volume_ids: Vec<_> = volumes.iter().map(|v| v.volume_id.clone()).collect();
-    let nb_s3_objects = state.metadata.list_keys().map(|k| k.len()).unwrap_or(0);
+    let nb_s3_objects = match state.metadata.list_keys() {
+        Ok(keys) => Some(keys.len()),
+        Err(e) => {
+            tracing::warn!("Cannot count the keys for /admin/status: {}", e);
+            None
+        }
+    };
     axum::Json(json!({
         "node_id": state.raft.node_id(),
         "role": role,
@@ -713,7 +761,7 @@ async fn admin_import(
 
     AUDIT_LOGGER.log_event(
         AuditEventType::System,
-        "admin".to_string(),
+        UNAUTHENTICATED,
         None,
         format!("Imported {} keys", success_count),
         None,
@@ -725,6 +773,9 @@ async fn admin_import(
     }))
 }
 
+/// Streams every key as newline-delimited JSON: `{"key", "value"}`, or
+/// `{"key", "error"}` when the value cannot be read. Values are decoded as
+/// UTF-8, with invalid bytes replaced.
 async fn admin_export(State(state): State<CoordState>) -> impl IntoResponse {
     let keys = match state.metadata.list_keys() {
         Ok(keys) => keys,
@@ -740,13 +791,17 @@ async fn admin_export(State(state): State<CoordState>) -> impl IntoResponse {
     let objects = state.objects.clone();
     let body = stream! {
         for key in keys {
-            if let Ok(value) = objects.get(&key).await {
-                let entry = json!({
+            let entry = match objects.get(&key).await {
+                Ok(value) => json!({
                     "key": key,
                     "value": String::from_utf8_lossy(&value)
-                });
-                yield Ok::<_, std::convert::Infallible>(axum::body::Bytes::from(format!("{}\n", entry)));
-            }
+                }),
+                Err(e) => json!({
+                    "key": key,
+                    "error": e.to_string()
+                }),
+            };
+            yield Ok::<_, std::convert::Infallible>(axum::body::Bytes::from(format!("{}\n", entry)));
         }
     };
 
@@ -770,6 +825,9 @@ struct Operation {
     value: Option<String>,
 }
 
+/// Runs the operations one after the other. It is not atomic: a failed
+/// operation does not undo the ones before it, and each operation reports its
+/// own result. Deleting a missing key counts as a success.
 async fn transaction_ops(
     State(state): State<CoordState>,
     axum::Json(req): axum::Json<TransactionRequest>,
@@ -829,9 +887,12 @@ async fn transaction_ops(
 
     AUDIT_LOGGER.log_event(
         AuditEventType::System,
-        "transaction".to_string(),
+        UNAUTHENTICATED,
         None,
-        format!("Executed {} operations in transaction", success_count),
+        format!(
+            "Transaction: {} of {} operations succeeded",
+            success_count, total_operations
+        ),
         None,
     );
 
@@ -847,30 +908,50 @@ struct SearchQuery {
     value: String,
 }
 
+/// Whether `needle` appears in `haystack`, byte for byte.
+fn contains_bytes(haystack: &[u8], needle: &[u8]) -> bool {
+    needle.is_empty()
+        || haystack
+            .windows(needle.len())
+            .any(|window| window == needle)
+}
+
+/// Lists the keys whose value contains `value`, compared byte for byte. The
+/// keys whose value cannot be read are listed under `unreadable`, with the
+/// error.
 async fn search_keys(
     State(state): State<CoordState>,
     Query(params): Query<SearchQuery>,
-) -> impl IntoResponse {
-    match state.metadata.list_keys() {
-        Ok(keys) => {
-            let mut matching_keys = Vec::new();
-            for key in keys {
-                if let Ok(value_bytes) = state.objects.get(&key).await {
-                    if let Ok(value_str) = std::str::from_utf8(&value_bytes) {
-                        if value_str.contains(&params.value) {
-                            matching_keys.push(key);
-                        }
-                    }
+) -> Response {
+    let keys = match state.metadata.list_keys() {
+        Ok(keys) => keys,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                axum::Json(json!({ "error": format!("list_keys error: {}", e) })),
+            )
+                .into_response();
+        }
+    };
+    let mut matching_keys = Vec::new();
+    let mut unreadable = Vec::new();
+    for key in keys {
+        match state.objects.get(&key).await {
+            Ok(value) => {
+                if contains_bytes(&value, params.value.as_bytes()) {
+                    matching_keys.push(key);
                 }
             }
-            axum::Json(json!({
-                "query": params.value,
-                "matching_keys": matching_keys,
-                "total_matches": matching_keys.len()
-            }))
+            Err(e) => unreadable.push(json!({ "key": key, "error": e.to_string() })),
         }
-        Err(e) => axum::Json(json!({ "error": format!("list_keys error: {}", e) })),
     }
+    axum::Json(json!({
+        "query": params.value,
+        "matching_keys": matching_keys,
+        "total_matches": matching_keys.len(),
+        "unreadable": unreadable
+    }))
+    .into_response()
 }
 
 #[derive(Serialize)]
@@ -881,7 +962,7 @@ struct TransactionResult {
     error: Option<String>,
 }
 
-/// HTTP handler for range queries: GET /range?start=...&end=...&include_values=...
+/// Query of `GET /range?start=...&end=...&include_values=...`.
 #[derive(Deserialize)]
 struct RangeQuery {
     start: String,
@@ -889,6 +970,10 @@ struct RangeQuery {
     include_values: Option<bool>,
 }
 
+/// Lists the keys between `start` and `end`, both included. With
+/// `include_values=true`, `values` holds the metadata of each key (replicas,
+/// size, BLAKE3, timestamps), not the stored values; clients depend on this
+/// shape.
 async fn range_query(
     State(state): State<CoordState>,
     Query(params): Query<RangeQuery>,
@@ -1015,62 +1100,142 @@ async fn batch_ops(
     axum::Json(json!({ "results": results }))
 }
 
-pub async fn metrics(State(state): State<CoordState>) -> impl IntoResponse {
-    let mut out = String::new();
-    let volumes: Vec<crate::coordinator::metadata::VolumeMetadata> = state.objects.live_volumes();
-    let total_keys: u64 = volumes.iter().map(|v| v.total_keys).sum();
-    out += &format!("minikv_total_keys {{}} {}\n", total_keys);
-    out += &format!("minikv_healthy_volumes {{}} {}\n", volumes.len());
-    for v in &volumes {
-        out += &format!(
-            "minikv_volume_bytes {{volume_id=\"{}\"}} {}\n",
-            v.volume_id, v.total_bytes
-        );
-        out += &format!(
-            "minikv_volume_free_bytes {{volume_id=\"{}\"}} {}\n",
-            v.volume_id, v.free_bytes
-        );
-        out += &format!(
-            "minikv_volume_total_keys {{volume_id=\"{}\"}} {}\n",
-            v.volume_id, v.total_keys
-        );
-    }
-    let role = if state.raft.is_leader() {
-        "leader"
-    } else {
-        "follower"
-    };
-    out += &format!("minikv_raft_role {{}} \"{}\"\n", role);
-    out += &format!("minikv_raft_term {{}} {}\n", state.raft.get_term());
-    out += &format!(
-        "minikv_raft_commit_index {{}} {}\n",
-        state.raft.commit_index()
-    );
-
-    out += &crate::common::METRICS.to_prometheus();
-
-    let s3_objects = state.metadata.list_keys().map(|k| k.len()).unwrap_or(0);
-    let s3_objects_with_ttl = 0;
-    out += &format!("minikv_s3_objects_total {{}} {}\n", s3_objects);
-    out += &format!("minikv_s3_objects_with_ttl {{}} {}\n", s3_objects_with_ttl);
-
-    (axum::http::StatusCode::OK, out)
+/// Escapes a label value of the Prometheus text format.
+fn label_value(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('\n', "\\n")
 }
 
-#[allow(dead_code)]
-async fn health(State(state): State<CoordState>) -> impl IntoResponse {
-    let role = if state.raft.is_leader() {
-        "Leader"
-    } else {
-        "Follower"
-    };
+/// Starts a metric family: its `# HELP` and `# TYPE` lines.
+fn metric_family(out: &mut String, name: &str, kind: &str, help: &str) {
+    out.push_str(&format!(
+        "# HELP {} {}\n# TYPE {} {}\n",
+        name, help, name, kind
+    ));
+}
 
-    axum::Json(json!({
-        "status": "healthy",
-        "role": role,
-        "is_leader": state.raft.is_leader(),
-        "version": env!("CARGO_PKG_VERSION"),
-    }))
+/// Metrics in the Prometheus text format (version 0.0.4). Only values that
+/// minikv measures are exported.
+pub async fn metrics(State(state): State<CoordState>) -> impl IntoResponse {
+    let mut out = String::new();
+    let volumes = state.objects.live_volumes();
+
+    metric_family(
+        &mut out,
+        "minikv_healthy_volumes",
+        "gauge",
+        "Volumes whose last heartbeat is recent.",
+    );
+    out += &format!("minikv_healthy_volumes {}\n", volumes.len());
+
+    metric_family(
+        &mut out,
+        "minikv_total_keys",
+        "gauge",
+        "Blobs held by the healthy volumes, from their heartbeats. Every replica, \
+         every stored version and every orphan counts: this is not a number of keys.",
+    );
+    let total_keys: u64 = volumes.iter().map(|v| v.total_keys).sum();
+    out += &format!("minikv_total_keys {}\n", total_keys);
+
+    metric_family(
+        &mut out,
+        "minikv_volume_bytes",
+        "gauge",
+        "Bytes of values held by a volume, from its last heartbeat.",
+    );
+    for v in &volumes {
+        out += &format!(
+            "minikv_volume_bytes{{volume_id=\"{}\"}} {}\n",
+            label_value(&v.volume_id),
+            v.total_bytes
+        );
+    }
+
+    metric_family(
+        &mut out,
+        "minikv_volume_total_keys",
+        "gauge",
+        "Blobs held by a volume, from its last heartbeat.",
+    );
+    for v in &volumes {
+        out += &format!(
+            "minikv_volume_total_keys{{volume_id=\"{}\"}} {}\n",
+            label_value(&v.volume_id),
+            v.total_keys
+        );
+    }
+
+    metric_family(
+        &mut out,
+        "minikv_raft_role",
+        "gauge",
+        "Raft role of this coordinator: 1 for its current role, 0 for the others.",
+    );
+    let role = state.raft.get_role();
+    for (name, current) in [
+        ("leader", role == RaftRole::Leader),
+        ("candidate", role == RaftRole::Candidate),
+        ("follower", role == RaftRole::Follower),
+    ] {
+        out += &format!(
+            "minikv_raft_role{{role=\"{}\"}} {}\n",
+            name,
+            u8::from(current)
+        );
+    }
+
+    metric_family(
+        &mut out,
+        "minikv_raft_term",
+        "gauge",
+        "Current Raft term of this coordinator.",
+    );
+    out += &format!("minikv_raft_term {}\n", state.raft.get_term());
+
+    metric_family(
+        &mut out,
+        "minikv_raft_commit_index",
+        "gauge",
+        "Index of the last Raft log entry known to be committed.",
+    );
+    out += &format!("minikv_raft_commit_index {}\n", state.raft.commit_index());
+
+    metric_family(
+        &mut out,
+        "minikv_uptime_seconds",
+        "gauge",
+        "Seconds since the coordinator started.",
+    );
+    out += &format!(
+        "minikv_uptime_seconds {}\n",
+        crate::common::METRICS.uptime_seconds()
+    );
+
+    // Left out, rather than reported as 0, when the store cannot be listed.
+    match state.metadata.list_keys() {
+        Ok(keys) => {
+            metric_family(
+                &mut out,
+                "minikv_s3_objects_total",
+                "gauge",
+                "Keys in the metadata store, S3 objects or not.",
+            );
+            out += &format!("minikv_s3_objects_total {}\n", keys.len());
+        }
+        Err(e) => tracing::warn!("Cannot count the keys for /metrics: {}", e),
+    }
+
+    (
+        StatusCode::OK,
+        [(
+            axum::http::header::CONTENT_TYPE,
+            "text/plain; version=0.0.4; charset=utf-8",
+        )],
+        out,
+    )
 }
 
 async fn admin_ui_handler() -> impl IntoResponse {
@@ -1166,7 +1331,7 @@ async fn admin_enable_plugin(Path(plugin_id): Path<String>) -> impl IntoResponse
         Ok(()) => {
             AUDIT_LOGGER.log_event(
                 AuditEventType::System,
-                "admin".to_string(),
+                UNAUTHENTICATED,
                 Some(plugin_id.clone()),
                 "Enabled plugin".to_string(),
                 None,
@@ -1193,7 +1358,7 @@ async fn admin_disable_plugin(Path(plugin_id): Path<String>) -> impl IntoRespons
         Ok(()) => {
             AUDIT_LOGGER.log_event(
                 AuditEventType::System,
-                "admin".to_string(),
+                UNAUTHENTICATED,
                 Some(plugin_id.clone()),
                 "Disabled plugin".to_string(),
                 None,
@@ -1225,8 +1390,7 @@ async fn admin_cdc_status() -> impl IntoResponse {
     if enabled {
         axum::Json(json!({
             "enabled": true,
-            "current_sequence": sequence,
-            "sinks": []
+            "current_sequence": sequence
         }))
     } else {
         axum::Json(json!({
@@ -1236,35 +1400,42 @@ async fn admin_cdc_status() -> impl IntoResponse {
     }
 }
 
-async fn admin_timeseries_stats() -> impl IntoResponse {
+/// What the time-series engine accepts and holds. The lists are the values
+/// that `/ts/query` accepts. The engine that `ensure_timeseries_engine`
+/// creates uses delta encoding only. Retention and downsampling are not
+/// applied (nothing runs them), so their settings are not reported.
+async fn admin_timeseries_stats() -> Response {
     ensure_timeseries_engine();
     let guard = crate::common::timeseries::TIMESERIES_ENGINE.read().unwrap();
-
-    let stats = guard.as_ref().map(|engine| engine.stats()).unwrap_or(
-        crate::common::timeseries::TimeseriesStats {
-            total_series: 0,
-            total_points: 0,
-            total_bytes: 0,
-            retention_days: 30,
-            downsample_rules: 0,
-        },
-    );
+    let Some(engine) = guard.as_ref() else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            axum::Json(json!({ "error": "timeseries engine unavailable" })),
+        )
+            .into_response();
+    };
+    let stats = engine.stats();
 
     axum::Json(json!({
         "enabled": true,
-        "resolutions": ["raw", "1min", "5min", "1hour", "1day"],
-        "compression": ["delta", "gorilla"],
-        "aggregations": ["sum", "avg", "min", "max", "count", "stddev"],
-        "stats": stats,
+        "resolutions": ["second", "minute", "hour", "day", "week", "month"],
+        "compression": ["delta"],
+        "aggregations": ["average", "sum", "min", "max", "count", "first", "last"],
+        "stats": {
+            "total_series": stats.total_series,
+            "total_points": stats.total_points,
+            "total_bytes": stats.total_bytes,
+        },
     }))
+    .into_response()
 }
 
+/// Geographic routing is not wired into the coordinator: nothing starts it.
 async fn admin_geo_status() -> impl IntoResponse {
     axum::Json(json!({
         "enabled": false,
         "local_region": null,
         "remote_regions": [],
-        "routing_strategy": "nearest",
     }))
 }
 
@@ -1583,6 +1754,6 @@ async fn admin_vector_stats() -> impl IntoResponse {
         "index_type": "persistent_flat",
         "vectors": index.len(),
         "dimensions": dims,
-        "path": VECTOR_INDEX_PATH
+        "path": vector_index_path().display().to_string()
     }))
 }

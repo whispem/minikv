@@ -1,10 +1,11 @@
 //! Structured audit logging for admin and sensitive actions.
 
 use chrono::{DateTime, Utc};
-use once_cell::sync::Lazy;
+use once_cell::sync::{Lazy, OnceCell};
 use serde::{Deserialize, Serialize};
 use std::fs::{File, OpenOptions};
 use std::io::Write;
+use std::path::PathBuf;
 use std::sync::Mutex;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -38,7 +39,26 @@ pub struct AuditLogger {
     to_stdout: bool,
 }
 
-pub static AUDIT_LOGGER: Lazy<AuditLogger> = Lazy::new(|| AuditLogger::new("audit.log", true));
+/// The file [`AUDIT_LOGGER`] appends to, when set before its first use.
+static LOG_PATH: OnceCell<PathBuf> = OnceCell::new();
+
+/// Writes to `audit.log` in the working directory, unless
+/// [`set_audit_log_path`] chose another file first. Every entry also goes to
+/// standard output.
+pub static AUDIT_LOGGER: Lazy<AuditLogger> = Lazy::new(|| {
+    let path = LOG_PATH
+        .get()
+        .cloned()
+        .unwrap_or_else(|| PathBuf::from("audit.log"));
+    AuditLogger::new(&path.to_string_lossy(), true)
+});
+
+/// Chooses the file of [`AUDIT_LOGGER`]. The coordinator uses `audit.log` in
+/// its data directory. Returns `false`, and changes nothing, when a path was
+/// already chosen or when the logger has already written.
+pub fn set_audit_log_path(path: impl Into<PathBuf>) -> bool {
+    Lazy::get(&AUDIT_LOGGER).is_none() && LOG_PATH.set(path.into()).is_ok()
+}
 
 impl AuditLogger {
     pub fn new(path: &str, to_stdout: bool) -> Self {
