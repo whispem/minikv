@@ -2,7 +2,7 @@
 //!
 //! The coordinator is responsible for:
 //! - Metadata management (key -> replicas mapping)
-//! - Placement decisions (HRW + sharding)
+//! - Placement decisions (rendezvous hashing, HRW, on each key)
 //! - Write orchestration (2PC with volumes)
 //! - Health monitoring
 //! - Consensus via Raft

@@ -71,9 +71,14 @@ pub struct CoordinatorConfig {
     #[serde(default = "default_heartbeat_interval")]
     pub heartbeat_interval_ms: u64,
 
+    /// Reserved: nothing reads it, because the coordinators do not take Raft
+    /// snapshots yet. Kept for compatibility.
     #[serde(default = "default_snapshot_threshold")]
     pub snapshot_threshold: u64,
 
+    /// Reserved for the virtual shards planned for v2.2.0. Placement does not
+    /// use shards: it ranks the live volumes with HRW on each key. Kept for
+    /// compatibility.
     #[serde(default = "default_num_shards")]
     pub num_shards: u64,
 

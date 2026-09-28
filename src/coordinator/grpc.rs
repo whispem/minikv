@@ -7,6 +7,10 @@ use crate::proto::*;
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
 
+/// The `cluster_id` of every `Join` answer: minikv clusters have no identifier
+/// of their own.
+const CLUSTER_ID: &str = "minikv";
+
 pub struct CoordGrpcService {
     raft: Option<Arc<RaftNode>>,
     objects: Option<ObjectStore>,
@@ -150,6 +154,10 @@ impl CoordinatorInternal for CoordGrpcService {
         Ok(Response::new(response))
     }
 
+    /// Registers a volume. The minikv volume servers do not call it: they
+    /// register through `POST /internal/volumes/heartbeat` on every
+    /// coordinator. Kept for wire compatibility. The shards of the request are
+    /// stored but never used for placement.
     async fn join(&self, req: Request<JoinRequest>) -> Result<Response<JoinResponse>, Status> {
         let store = self.metadata()?;
         let req = req.into_inner();
@@ -169,10 +177,14 @@ impl CoordinatorInternal for CoordGrpcService {
             .map_err(|e| Status::internal(e.to_string()))?;
         Ok(Response::new(JoinResponse {
             ok: true,
-            cluster_id: "minikv".to_string(),
+            cluster_id: CLUSTER_ID.to_string(),
         }))
     }
 
+    /// Updates the counters of a registered volume, or answers
+    /// `commands: ["join"]` for an unknown one. The minikv volume servers do
+    /// not call it: their heartbeats go through HTTP. Kept for wire
+    /// compatibility.
     async fn heartbeat(
         &self,
         req: Request<HeartbeatRequest>,

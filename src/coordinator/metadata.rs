@@ -1,3 +1,11 @@
+//! Coordinator metadata, stored in RocksDB.
+//!
+//! The store holds the key metadata (replicas, size, BLAKE3 hash, timestamps)
+//! and the volume registry (addresses, state and the counters of the last
+//! heartbeat). Its `config` column family is not used yet. Values are encoded
+//! with bincode, which is positional: a field cannot be removed without making
+//! the existing data unreadable.
+
 use once_cell::sync::OnceCell;
 use std::sync::Arc;
 static GLOBAL_STORE: OnceCell<Arc<MetadataStore>> = OnceCell::new();
@@ -12,8 +20,7 @@ pub fn get_global_store() -> Arc<MetadataStore> {
         .expect("Global MetadataStore not initialized")
         .clone()
 }
-///
-/// It stores key metadata (replicas, size, hash, timestamps), volume registry (node_id to address, state, shards), and cluster configuration.
+
 use crate::common::{NodeState, Result};
 use rocksdb::{Options, DB};
 use serde::{Deserialize, Serialize};
@@ -42,13 +49,17 @@ pub enum KeyState {
     Tombstone,
 }
 
-/// Describes a single volume in the cluster, including its address, state, and assigned shards.
+/// A volume server known to the coordinator: its addresses, its state and the
+/// counters of its last heartbeat.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VolumeMetadata {
     pub volume_id: String,
     pub address: String,
     pub grpc_address: String,
     pub state: NodeState,
+    /// Reserved: no minikv component assigns or reports shards, so the list
+    /// stays empty. Kept because the registry is stored with bincode, which
+    /// is positional.
     pub shards: Vec<u64>,
     pub total_keys: u64,
     pub total_bytes: u64,

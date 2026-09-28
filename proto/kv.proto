@@ -9,7 +9,7 @@ service VolumeInternal {
   rpc Commit(CommitRequest) returns (CommitResponse);
   rpc Abort(AbortRequest) returns (AbortResponse);
   
-  // Replication & repair
+  // Reads and deletes: the coordinator pulls a blob to answer a GET
   rpc Pull(PullRequest) returns (stream Chunk);
   rpc Delete(DeleteRequest) returns (DeleteResponse);
   
@@ -18,7 +18,8 @@ service VolumeInternal {
   rpc Stats(StatsRequest) returns (StatsResponse);
 }
 
-// Coordinator service (volume → coordinator, raft peers)
+// Coordinator service (Raft between coordinators, plus registration, range and
+// batch RPCs)
 service CoordinatorInternal {
   // Raft RPCs
   rpc RequestVote(VoteRequest) returns (VoteResponse);
@@ -26,7 +27,9 @@ service CoordinatorInternal {
   rpc InstallSnapshot(SnapshotRequest) returns (SnapshotResponse);
   rpc ReadIndex(ReadIndexRequest) returns (ReadIndexResponse);
 
-  // Volume registration
+  // Volume registration. The minikv volume servers do not use these two RPCs:
+  // they send their heartbeats to POST /internal/volumes/heartbeat on every
+  // coordinator. Kept for wire compatibility.
   rpc Join(JoinRequest) returns (JoinResponse);
   rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
 
@@ -107,11 +110,11 @@ message AbortResponse {
   bool ok = 1;
 }
 
-// ===== Replication Messages =====
+// ===== Read Messages =====
 
 message PullRequest {
   string key = 1;
-  string source_url = 2;
+  string source_url = 2; // Reserved: never set or read.
 }
 
 message Chunk {
@@ -144,7 +147,7 @@ message StatsResponse {
   uint64 total_keys = 1;
   uint64 total_bytes = 2;
   uint64 free_bytes = 3;
-  repeated string shards = 4;
+  repeated string shards = 4; // Reserved: always empty, volumes have no shards.
 }
 
 // ===== Raft Messages =====
@@ -207,7 +210,7 @@ message LogEntry {
 message JoinRequest {
   string volume_id = 1;
   string address = 2;
-  repeated string shards = 3;
+  repeated string shards = 3; // Reserved: stored, never used for placement.
 }
 
 message JoinResponse {
@@ -224,5 +227,5 @@ message HeartbeatRequest {
 
 message HeartbeatResponse {
   bool ok = 1;
-  repeated string commands = 2; // e.g., ["compact_shard:0", "rebalance"]
+  repeated string commands = 2; // [] for a registered volume, ["join"] otherwise.
 }

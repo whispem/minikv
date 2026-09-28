@@ -17,12 +17,23 @@ const SNAPSHOT_MAGIC: &[u8; 8] = b"KVINDEX3"; // Bumped version for TTL support
 /// Describes the physical location of a value in the log-structured storage engine.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlobLocation {
+    /// Number of the segment file that holds the record (`seg_NNNN.blob`).
+    /// Despite its name, it has nothing to do with sharding: read it with
+    /// [`segment`](Self::segment). A future major version will rename it.
     pub shard: u64,
     pub offset: u64,
     pub size: u64,
     pub blake3: String,
     #[serde(default)]
     pub expires_at: Option<u64>,
+}
+
+impl BlobLocation {
+    /// Number of the segment file that holds the record. Same value as the
+    /// `shard` field, under its real meaning.
+    pub fn segment(&self) -> u64 {
+        self.shard
+    }
 }
 
 #[derive(Debug, Default)]

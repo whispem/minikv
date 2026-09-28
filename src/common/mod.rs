@@ -35,10 +35,10 @@ pub use encryption::{
     EncryptionManager, EncryptionResult, EncryptionStatus, ENCRYPTION_MANAGER,
 };
 pub use error::{Error, Result};
-pub use hash::{
-    blake3_hash, blob_prefix, hrw_hash, select_replicas, shard_key, Blake3Hasher,
-    ConsistentHashRing,
-};
+pub use hash::{blake3_hash, hrw_hash, select_replicas, shard_key, Blake3Hasher};
+// Deprecated since 2.0.1, still exported for compatibility.
+#[allow(deprecated)]
+pub use hash::{blob_prefix, ConsistentHashRing};
 pub use metrics::{Counter, Gauge, Histogram, MetricsRegistry, METRICS};
 pub use quota::{QuotaCheckResult, QuotaManager, TenantQuota, TenantUsage, QUOTA_MANAGER};
 pub use ratelimit::{RateLimitConfig, RateLimitResult, RateLimitStats, RateLimiter};

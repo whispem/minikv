@@ -42,6 +42,11 @@ pub enum Error {
     #[error("Insufficient replicas: need {needed}, have {available}")]
     InsufficientReplicas { needed: usize, available: usize },
 
+    /// Never returned: minikv places keys with HRW and has no shards.
+    #[deprecated(
+        since = "2.0.1",
+        note = "never returned: minikv places keys with HRW and has no shards"
+    )]
     #[error("Shard not found: {0}")]
     ShardNotFound(u64),
 
