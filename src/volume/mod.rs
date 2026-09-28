@@ -3,9 +3,10 @@
 //! Handles blob storage with:
 //! - Write-ahead log (WAL) for durability
 //! - Segmented append-only storage
-//! - Automatic compaction
 //! - Bloom filters for fast negative lookups
-//! - Index snapshots for fast restarts
+//! - An index rebuilt from the segments and the WAL at every start
+//!
+//! There is no compaction: the segments and the WAL only grow.
 
 pub mod blob;
 pub mod compaction;

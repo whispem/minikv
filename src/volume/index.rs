@@ -2,8 +2,11 @@
 //!
 //! This module provides a fast, in-memory HashMap index for key-value lookups.
 //! Each key maps to a BlobLocation, which describes where the value is stored on disk.
-//! The index supports snapshotting for fast recovery after a crash.
-//! TTL (Time-To-Live) support enables automatic key expiration.
+//! The index can be saved to a snapshot file and loaded back; the volume
+//! server rebuilds it from the segments and the WAL, and only takes the
+//! expiries from a snapshot.
+//! A key can carry an expiry: reads skip expired keys, and `cleanup_expired`
+//! removes them.
 
 use crate::common::Result;
 use serde::{Deserialize, Serialize};
@@ -22,7 +25,10 @@ pub struct BlobLocation {
     /// [`segment`](Self::segment). A future major version will rename it.
     pub shard: u64,
     pub offset: u64,
+    /// Size of the value, before compression.
     pub size: u64,
+    /// BLAKE3 of the value, in hexadecimal. Empty when the index was rebuilt
+    /// from a record that could not be read.
     pub blake3: String,
     #[serde(default)]
     pub expires_at: Option<u64>,

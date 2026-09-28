@@ -31,6 +31,11 @@ fn internal<E: std::fmt::Display>(e: E) -> Status {
 }
 
 impl VolumeGrpcService {
+    /// Serves `store` under the volume id `vol-1`, whatever the volume.
+    #[deprecated(
+        since = "2.0.1",
+        note = "hard-codes the volume id `vol-1`; use `with_store`"
+    )]
     pub fn new(store: BlobStore) -> Self {
         Self::with_store("vol-1".to_string(), Arc::new(Mutex::new(store)))
     }
