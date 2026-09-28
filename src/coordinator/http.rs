@@ -116,32 +116,36 @@ fn persist_vector_index() -> Result<(), String> {
     Ok(())
 }
 
-async fn admin_repair(State(_state): State<CoordState>) -> impl IntoResponse {
-    let res = crate::ops::repair::repair_cluster("http://localhost:8000", 3, false).await;
-    match res {
-        Ok(report) => axum::Json(json!({ "status": "ok", "report": report })),
-        Err(e) => axum::Json(json!({ "status": "error", "error": format!("{}", e) })),
-    }
+/// Header that asked for an expiration time. minikv does not implement TTLs.
+const TTL_HEADER: &str = "x-minikv-ttl";
+
+/// Answers `501 Not Implemented` with the feature and the release planned for it.
+fn not_implemented(feature: NotImplemented) -> Response {
+    (
+        StatusCode::NOT_IMPLEMENTED,
+        axum::Json(json!({
+            "error": "not implemented",
+            "feature": feature.feature,
+            "roadmap": feature.roadmap,
+        })),
+    )
+        .into_response()
 }
 
-async fn admin_compact(State(_state): State<CoordState>) -> impl IntoResponse {
-    let res = crate::ops::compact::compact_cluster("http://localhost:8000", None).await;
-    match res {
-        Ok(report) => axum::Json(json!({ "status": "ok", "report": report })),
-        Err(e) => axum::Json(json!({ "status": "error", "error": format!("{}", e) })),
-    }
+async fn admin_repair() -> Response {
+    not_implemented(NotImplemented::REPAIR)
 }
 
-async fn admin_verify(State(_state): State<CoordState>) -> impl IntoResponse {
-    let res = crate::ops::verify::verify_cluster("http://localhost:8000", false, 16).await;
-    match res {
-        Ok(report) => axum::Json(json!({ "status": "ok", "report": report })),
-        Err(e) => axum::Json(json!({ "status": "error", "error": format!("{}", e) })),
-    }
+async fn admin_compact() -> Response {
+    not_implemented(NotImplemented::COMPACT)
 }
 
-async fn admin_scale(State(_state): State<CoordState>) -> impl IntoResponse {
-    axum::Json(json!({ "status": "scaling triggered" }))
+async fn admin_verify() -> Response {
+    not_implemented(NotImplemented::VERIFY)
+}
+
+async fn admin_scale() -> Response {
+    not_implemented(NotImplemented::SCALE)
 }
 
 use axum::{
@@ -159,6 +163,7 @@ use crate::coordinator::metadata::MetadataStore;
 use crate::coordinator::objects::{ObjectError, ObjectStore, VolumeHeartbeat};
 use crate::coordinator::placement::PlacementManager;
 use crate::coordinator::raft_node::{RaftNode, RaftRole};
+use crate::ops::NotImplemented;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::response::{Response, Sse};
 
@@ -397,28 +402,22 @@ async fn s3_put_object(
     headers: axum::http::HeaderMap,
     body: Bytes,
 ) -> Response {
+    if headers.contains_key(TTL_HEADER) {
+        return not_implemented(NotImplemented::TTL);
+    }
     let full_key = format!("{}/{}", bucket, key);
-
-    let ttl_secs: Option<u64> = headers
-        .get("X-Minikv-TTL")
-        .and_then(|v| v.to_str().ok())
-        .and_then(|s| s.parse().ok());
 
     match state.objects.put(&full_key, body.to_vec()).await {
         Ok(stored) => {
             notify_change("put", &full_key);
-            let ttl_info = ttl_secs
-                .map(|t| format!(", TTL: {}s", t))
-                .unwrap_or_default();
             (
                 StatusCode::OK,
                 format!(
-                    "PUT S3 {}/{} committed via 2PC on {} volume(s) ({} bytes{})",
+                    "PUT S3 {}/{} committed via 2PC on {} volume(s) ({} bytes)",
                     bucket,
                     key,
                     stored.replicas.len(),
-                    stored.size,
-                    ttl_info
+                    stored.size
                 ),
             )
                 .into_response()
@@ -462,7 +461,15 @@ async fn s3_delete_object(
     }
 }
 
-async fn kv_put(State(state): State<CoordState>, Path(key): Path<String>, body: Bytes) -> Response {
+async fn kv_put(
+    State(state): State<CoordState>,
+    Path(key): Path<String>,
+    headers: axum::http::HeaderMap,
+    body: Bytes,
+) -> Response {
+    if headers.contains_key(TTL_HEADER) {
+        return not_implemented(NotImplemented::TTL);
+    }
     match state.objects.put(&key, body.to_vec()).await {
         Ok(stored) => {
             notify_change("put", &key);
@@ -1070,183 +1077,27 @@ async fn admin_ui_handler() -> impl IntoResponse {
     crate::common::admin_ui::admin_dashboard().await
 }
 
-#[derive(Debug, Deserialize)]
-struct CreateBackupRequest {
-    #[serde(rename = "type", default = "default_backup_type")]
-    backup_type: String,
+// Backups and restores are not implemented: `BackupManager` only creates empty
+// directories and a manifest, and nothing initializes it in the coordinator.
+
+async fn admin_create_backup() -> Response {
+    not_implemented(NotImplemented::BACKUP)
 }
 
-fn default_backup_type() -> String {
-    "full".to_string()
+async fn admin_list_backups() -> Response {
+    not_implemented(NotImplemented::BACKUP)
 }
 
-async fn admin_create_backup(
-    axum::Json(req): axum::Json<CreateBackupRequest>,
-) -> impl IntoResponse {
-    let backup_type = match req.backup_type.as_str() {
-        "incremental" => crate::common::backup::BackupType::Incremental,
-        _ => crate::common::backup::BackupType::Full,
-    };
-
-    let guard = crate::common::backup::BACKUP_MANAGER.read().await;
-    if let Some(ref manager) = *guard {
-        let config = crate::common::backup::BackupConfig::default();
-        match manager.start_backup(config, backup_type).await {
-            Ok(backup_id) => {
-                AUDIT_LOGGER.log_event(
-                    AuditEventType::System,
-                    "admin".to_string(),
-                    Some(backup_id.clone()),
-                    format!("Started {:?} backup", backup_type),
-                    None,
-                );
-                (
-                    StatusCode::ACCEPTED,
-                    axum::Json(json!({
-                        "status": "started",
-                        "backup_id": backup_id,
-                        "type": req.backup_type
-                    })),
-                )
-                    .into_response()
-            }
-            Err(e) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                axum::Json(json!({ "error": format!("{}", e) })),
-            )
-                .into_response(),
-        }
-    } else {
-        (
-            StatusCode::SERVICE_UNAVAILABLE,
-            axum::Json(json!({ "error": "Backup manager not initialized" })),
-        )
-            .into_response()
-    }
+async fn admin_get_backup() -> Response {
+    not_implemented(NotImplemented::BACKUP)
 }
 
-async fn admin_list_backups() -> impl IntoResponse {
-    let guard = crate::common::backup::BACKUP_MANAGER.read().await;
-    if let Some(ref manager) = *guard {
-        let backups = manager.list_backups().await;
-        axum::Json(json!({
-            "backups": backups,
-            "total": backups.len()
-        }))
-    } else {
-        axum::Json(json!({
-            "backups": [],
-            "total": 0
-        }))
-    }
+async fn admin_delete_backup() -> Response {
+    not_implemented(NotImplemented::BACKUP)
 }
 
-async fn admin_get_backup(Path(backup_id): Path<String>) -> impl IntoResponse {
-    let guard = crate::common::backup::BACKUP_MANAGER.read().await;
-    if let Some(ref manager) = *guard {
-        match manager.get_backup(&backup_id).await {
-            Some(manifest) => (StatusCode::OK, axum::Json(json!(manifest))).into_response(),
-            None => (
-                StatusCode::NOT_FOUND,
-                axum::Json(json!({ "error": "Backup not found" })),
-            )
-                .into_response(),
-        }
-    } else {
-        (
-            StatusCode::SERVICE_UNAVAILABLE,
-            axum::Json(json!({ "error": "Backup manager not initialized" })),
-        )
-            .into_response()
-    }
-}
-
-async fn admin_delete_backup(Path(backup_id): Path<String>) -> impl IntoResponse {
-    let guard = crate::common::backup::BACKUP_MANAGER.read().await;
-    if let Some(ref manager) = *guard {
-        match manager.delete_backup(&backup_id).await {
-            Ok(()) => {
-                AUDIT_LOGGER.log_event(
-                    AuditEventType::System,
-                    "admin".to_string(),
-                    Some(backup_id.clone()),
-                    "Deleted backup".to_string(),
-                    None,
-                );
-                (
-                    StatusCode::OK,
-                    axum::Json(json!({ "status": "deleted", "backup_id": backup_id })),
-                )
-                    .into_response()
-            }
-            Err(e) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                axum::Json(json!({ "error": format!("{}", e) })),
-            )
-                .into_response(),
-        }
-    } else {
-        (
-            StatusCode::SERVICE_UNAVAILABLE,
-            axum::Json(json!({ "error": "Backup manager not initialized" })),
-        )
-            .into_response()
-    }
-}
-
-#[derive(Debug, Deserialize)]
-struct RestoreRequest {
-    backup_id: String,
-    target_path: Option<String>,
-}
-
-async fn admin_restore(axum::Json(req): axum::Json<RestoreRequest>) -> impl IntoResponse {
-    let guard = crate::common::backup::BACKUP_MANAGER.read().await;
-    if let Some(ref manager) = *guard {
-        let config = crate::common::backup::RestoreConfig {
-            backup_id: req.backup_id.clone(),
-            source: crate::common::backup::BackupDestination::Local {
-                path: "./backups".to_string(),
-            },
-            target_path: req.target_path.unwrap_or_else(|| "./restore".to_string()),
-            decryption_key: None,
-            point_in_time: None,
-            parallel_workers: 4,
-            verify_checksums: true,
-        };
-
-        match manager.start_restore(config).await {
-            Ok(restore_id) => {
-                AUDIT_LOGGER.log_event(
-                    AuditEventType::System,
-                    "admin".to_string(),
-                    Some(req.backup_id.clone()),
-                    format!("Started restore from backup {}", req.backup_id),
-                    None,
-                );
-                (
-                    StatusCode::ACCEPTED,
-                    axum::Json(json!({
-                        "status": "started",
-                        "restore_id": restore_id,
-                        "backup_id": req.backup_id
-                    })),
-                )
-                    .into_response()
-            }
-            Err(e) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                axum::Json(json!({ "error": format!("{}", e) })),
-            )
-                .into_response(),
-        }
-    } else {
-        (
-            StatusCode::SERVICE_UNAVAILABLE,
-            axum::Json(json!({ "error": "Backup manager not initialized" })),
-        )
-            .into_response()
-    }
+async fn admin_restore() -> Response {
+    not_implemented(NotImplemented::RESTORE)
 }
 
 async fn admin_replication_status() -> impl IntoResponse {

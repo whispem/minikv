@@ -302,7 +302,7 @@ const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
         <header>
             <div class="logo">minikv <span>admin</span></div>
             <div>
-                <span class="version-badge">v1.0.0</span>
+                <span class="version-badge">v{{VERSION}}</span>
             </div>
         </header>
         
@@ -320,9 +320,9 @@ const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 <div class="card">
                     <div class="card-header">
                         <span class="card-title">Cluster Status</span>
-                        <span class="status-indicator status-healthy" id="cluster-status"></span>
+                        <span class="status-indicator" id="cluster-status"></span>
                     </div>
-                    <div class="metric-value" id="cluster-role">Leader</div>
+                    <div class="metric-value" id="cluster-role">-</div>
                     <div class="metric-label">Current Role</div>
                 </div>
                 
@@ -331,24 +331,16 @@ const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                         <span class="card-title">Volumes</span>
                         <button class="refresh-btn" onclick="refreshStatus()">↻</button>
                     </div>
-                    <div class="metric-value" id="volume-count">0</div>
-                    <div class="metric-label">Active Volumes</div>
+                    <div class="metric-value" id="volume-count">-</div>
+                    <div class="metric-label">Live Volumes</div>
                 </div>
                 
                 <div class="card">
                     <div class="card-header">
-                        <span class="card-title">Objects</span>
+                        <span class="card-title">Keys</span>
                     </div>
-                    <div class="metric-value" id="object-count">0</div>
-                    <div class="metric-label">Total Objects</div>
-                </div>
-                
-                <div class="card">
-                    <div class="card-header">
-                        <span class="card-title">Storage</span>
-                    </div>
-                    <div class="metric-value" id="storage-used">0 B</div>
-                    <div class="metric-label">Total Storage</div>
+                    <div class="metric-value" id="object-count">-</div>
+                    <div class="metric-label">Keys in the metadata store</div>
                 </div>
             </div>
             
@@ -380,10 +372,6 @@ const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                     <span class="stat-label">Leader</span>
                     <span class="stat-value" id="leader-id">-</span>
                 </div>
-                <div class="stat-row">
-                    <span class="stat-label">Uptime</span>
-                    <span class="stat-value" id="uptime">-</span>
-                </div>
             </div>
         </div>
         
@@ -392,7 +380,6 @@ const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
             <div class="card">
                 <div class="card-header">
                     <span class="card-title">API Keys</span>
-                    <button class="btn btn-primary" onclick="showCreateKeyModal()">Create Key</button>
                 </div>
                 <table>
                     <thead>
@@ -441,7 +428,7 @@ const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                     <tbody id="backups-table">
                         <tr>
                             <td colspan="7" style="text-align: center; color: var(--text-secondary);">
-                                No backups found
+                                Loading...
                             </td>
                         </tr>
                     </tbody>
@@ -457,7 +444,7 @@ const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 </div>
                 <div id="replication-status">
                     <div class="alert alert-info">
-                        Cross-datacenter replication is available. Configure remote datacenters in config.toml.
+                        Cross-datacenter replication is not wired into the coordinator: nothing starts it, so there is no remote datacenter to show.
                     </div>
                 </div>
                 <table>
@@ -509,7 +496,7 @@ const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
         </div>
         
         <footer>
-            minikv v1.0.0 &mdash; A production-grade distributed KV store
+            minikv v{{VERSION}}
         </footer>
     </div>
     
@@ -523,14 +510,6 @@ const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
             });
         });
         
-        function formatBytes(bytes) {
-            if (bytes === 0) return '0 B';
-            const k = 1024;
-            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-        }
-        
         function formatDate(dateStr) {
             if (!dateStr) return '-';
             const date = new Date(dateStr);
@@ -538,21 +517,25 @@ const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
         }
         
         async function refreshStatus() {
+            const statusIndicator = document.getElementById('cluster-status');
             try {
                 const response = await fetch('/admin/status');
+                if (!response.ok) {
+                    throw new Error('HTTP ' + response.status);
+                }
                 const data = await response.json();
                 
-                document.getElementById('cluster-role').textContent = data.role || 'Unknown';
-                document.getElementById('volume-count').textContent = data.volumes?.length || 0;
-                document.getElementById('object-count').textContent = data.s3_object_count || 0;
-                document.getElementById('node-id').textContent = data.node_id || '-';
-                document.getElementById('raft-term').textContent = data.raft_term || '-';
-                document.getElementById('leader-id').textContent = data.leader || '-';
+                document.getElementById('cluster-role').textContent = data.role ?? '-';
+                document.getElementById('volume-count').textContent = data.nb_volumes ?? '-';
+                document.getElementById('object-count').textContent = data.nb_s3_objects ?? '-';
+                document.getElementById('node-id').textContent = data.node_id ?? '-';
+                document.getElementById('raft-term').textContent = data.term ?? '-';
+                document.getElementById('leader-id').textContent = data.leader ?? '-';
                 
-                const statusIndicator = document.getElementById('cluster-status');
                 statusIndicator.className = 'status-indicator ' + 
                     (data.role === 'Leader' ? 'status-healthy' : 'status-warning');
             } catch (error) {
+                statusIndicator.className = 'status-indicator status-error';
                 console.error('Failed to fetch status:', error);
             }
         }
@@ -589,49 +572,51 @@ const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
             }
         }
         
-        async function runVerify() {
+        // Turns an admin answer into a message. A 501 names the feature and the
+        // release planned for it.
+        async function describe(response) {
+            let data = null;
             try {
-                const response = await fetch('/admin/verify', { method: 'POST' });
-                const data = await response.json();
-                alert(JSON.stringify(data, null, 2));
+                data = await response.json();
             } catch (error) {
-                alert('Verify failed: ' + error.message);
+                data = null;
+            }
+            if (response.status === 501 && data) {
+                return `${data.feature} is not implemented (roadmap: ${data.roadmap})`;
+            }
+            if (!response.ok) {
+                return `Request failed: HTTP ${response.status}` + (data && data.error ? ` (${data.error})` : '');
+            }
+            return JSON.stringify(data, null, 2);
+        }
+        
+        async function runAdminAction(path, options = {}) {
+            try {
+                const response = await fetch(path, Object.assign({ method: 'POST' }, options));
+                alert(await describe(response));
+            } catch (error) {
+                alert('Request failed: ' + error.message);
             }
         }
         
-        async function runCompact() {
-            try {
-                const response = await fetch('/admin/compact', { method: 'POST' });
-                const data = await response.json();
-                alert(JSON.stringify(data, null, 2));
-            } catch (error) {
-                alert('Compact failed: ' + error.message);
-            }
+        function runVerify() {
+            return runAdminAction('/admin/verify');
         }
         
-        async function runRepair() {
-            try {
-                const response = await fetch('/admin/repair', { method: 'POST' });
-                const data = await response.json();
-                alert(JSON.stringify(data, null, 2));
-            } catch (error) {
-                alert('Repair failed: ' + error.message);
-            }
+        function runCompact() {
+            return runAdminAction('/admin/compact');
+        }
+        
+        function runRepair() {
+            return runAdminAction('/admin/repair');
         }
         
         async function createBackup(type = 'full') {
-            try {
-                const response = await fetch('/admin/backup', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ type: type })
-                });
-                const data = await response.json();
-                alert('Backup started: ' + data.backup_id);
-                refreshBackups();
-            } catch (error) {
-                alert('Backup failed: ' + error.message);
-            }
+            await runAdminAction('/admin/backup', {
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type: type })
+            });
+            refreshBackups();
         }
         
         async function revokeKey(keyId) {
@@ -645,36 +630,15 @@ const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
         }
         
         async function refreshBackups() {
+            const tbody = document.getElementById('backups-table');
+            let message;
             try {
-                const response = await fetch('/admin/backups');
-                const data = await response.json();
-                
-                const tbody = document.getElementById('backups-table');
-                if (data.backups && data.backups.length > 0) {
-                    tbody.innerHTML = data.backups.map(backup => `
-                        <tr>
-                            <td>${backup.id}</td>
-                            <td>${backup.backup_type}</td>
-                            <td>
-                                <span class="status-indicator ${
-                                    backup.status === 'completed' ? 'status-healthy' : 
-                                    backup.status === 'failed' ? 'status-error' : 'status-warning'
-                                }"></span>
-                                ${backup.status}
-                            </td>
-                            <td>${formatBytes(backup.size_bytes)}</td>
-                            <td>${backup.key_count}</td>
-                            <td>${formatDate(backup.started_at)}</td>
-                            <td>
-                                <button class="btn" onclick="restoreBackup('${backup.id}')">Restore</button>
-                                <button class="btn btn-danger" onclick="deleteBackup('${backup.id}')">Delete</button>
-                            </td>
-                        </tr>
-                    `).join('');
-                }
+                message = await describe(await fetch('/admin/backups'));
             } catch (error) {
-                console.error('Failed to fetch backups:', error);
+                message = 'Request failed: ' + error.message;
             }
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-secondary);"></td></tr>';
+            tbody.querySelector('td').textContent = message;
         }
         
         refreshStatus();
@@ -687,8 +651,11 @@ const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
 </html>
 "#;
 
+/// Serves the dashboard. It reads `/admin/status`, `/admin/keys` and
+/// `/admin/backups`, and shows the `501` message of the operations that are
+/// not implemented.
 pub async fn admin_dashboard() -> impl IntoResponse {
-    Html(DASHBOARD_HTML)
+    Html(DASHBOARD_HTML.replace("{{VERSION}}", env!("CARGO_PKG_VERSION")))
 }
 
 pub fn create_admin_ui_router() -> Router {
@@ -744,4 +711,60 @@ pub struct RemoteDCStatus {
     pub lag_secs: u64,
     pub pending_events: usize,
     pub last_sync: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    async fn dashboard_html() -> String {
+        let response = admin_dashboard().await.into_response();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        String::from_utf8(body.to_vec()).unwrap()
+    }
+
+    #[tokio::test]
+    async fn dashboard_shows_the_crate_version() {
+        let html = dashboard_html().await;
+        assert!(html.contains(&format!("v{}", env!("CARGO_PKG_VERSION"))));
+        assert!(!html.contains("{{VERSION}}"));
+        assert!(!html.contains("v1.0.0"));
+    }
+
+    #[tokio::test]
+    async fn dashboard_reads_the_fields_that_admin_status_returns() {
+        let html = dashboard_html().await;
+        for field in [
+            "data.role",
+            "data.nb_volumes",
+            "data.nb_s3_objects",
+            "data.node_id",
+            "data.term",
+            "data.leader",
+        ] {
+            assert!(html.contains(field), "the dashboard should read {}", field);
+        }
+        for stale in ["data.volumes", "data.s3_object_count", "data.raft_term"] {
+            assert!(!html.contains(stale), "{} does not exist", stale);
+        }
+    }
+
+    #[tokio::test]
+    async fn dashboard_has_no_placeholder_values_or_dead_buttons() {
+        let html = dashboard_html().await;
+        for stale in [
+            "storage-used",
+            "id=\"uptime\"",
+            "showCreateKeyModal",
+            "restoreBackup",
+            "deleteBackup",
+            "replication is available",
+            "Backup started",
+        ] {
+            assert!(!html.contains(stale), "{} should be gone", stale);
+        }
+        assert!(html.contains("is not implemented (roadmap: ${data.roadmap})"));
+    }
 }
