@@ -1,6 +1,14 @@
-//! Backup and restore with full/incremental snapshots.
+//! Bookkeeping for backups: one directory and one manifest per backup.
+//!
+//! It copies no data: [`BackupManager::start_backup`] creates the directories
+//! and a manifest marked in progress, and the caller is expected to copy the
+//! data, then call [`BackupManager::complete_backup`]. Restoring is not
+//! implemented: [`BackupManager::start_restore`] fails. minikv never uses this
+//! module: [`init_backup`] has no caller, and the backup and restore routes of
+//! the coordinator answer `501 Not Implemented`.
 
 use crate::common::{Error, Result};
+use crate::ops::NotImplemented;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -343,55 +351,9 @@ impl BackupManager {
         Ok(())
     }
 
-    pub async fn start_restore(&self, config: RestoreConfig) -> Result<String> {
-        let restore_id = format!("restore-{}", Utc::now().format("%Y%m%d-%H%M%S"));
-
-        let progress = BackupProgress {
-            id: restore_id.clone(),
-            phase: "initializing".to_string(),
-            total_bytes: 0,
-            processed_bytes: 0,
-            percent_complete: 0.0,
-            eta_seconds: None,
-            rate_bytes_per_sec: 0,
-            errors: vec![],
-        };
-
-        self.active_backups
-            .write()
-            .await
-            .insert(restore_id.clone(), progress);
-
-        let backup_dir = self.backup_path.join(&config.backup_id);
-        if !backup_dir.exists() {
-            return Err(Error::Other(format!(
-                "Backup {} not found",
-                config.backup_id
-            )));
-        }
-
-        let manifest_path = backup_dir.join("manifest.json");
-        let manifest_json = tokio::fs::read_to_string(&manifest_path)
-            .await
-            .map_err(|e| Error::Other(format!("Failed to read manifest: {}", e)))?;
-        let manifest: BackupManifest = serde_json::from_str(&manifest_json)
-            .map_err(|e| Error::Other(format!("Failed to parse manifest: {}", e)))?;
-
-        if manifest.status != BackupStatus::Completed {
-            return Err(Error::Other(format!(
-                "Cannot restore from backup with status {:?}",
-                manifest.status
-            )));
-        }
-
-        if config.verify_checksums {
-            self.update_progress(&restore_id, |p| {
-                p.phase = "verifying checksums".to_string();
-            })
-            .await;
-        }
-
-        Ok(restore_id)
+    /// Fails: restoring is not implemented.
+    pub async fn start_restore(&self, _config: RestoreConfig) -> Result<String> {
+        Err(NotImplemented::RESTORE.into())
     }
 
     pub async fn load_manifests(&self) -> Result<()> {
@@ -510,6 +472,39 @@ mod tests {
         assert_eq!(manifest.status, BackupStatus::Completed);
         assert_eq!(manifest.size_bytes, 1000);
         assert_eq!(manifest.key_count, 100);
+    }
+
+    #[tokio::test]
+    async fn restoring_fails_instead_of_returning_an_id() {
+        let temp_dir = TempDir::new().unwrap();
+        let manager = BackupManager::new(temp_dir.path());
+        let backup_id = manager
+            .start_backup(BackupConfig::default(), BackupType::Full)
+            .await
+            .unwrap();
+        manager
+            .complete_backup(&backup_id, 0, 0, String::new(), vec![])
+            .await
+            .unwrap();
+
+        let error = manager
+            .start_restore(RestoreConfig {
+                backup_id,
+                source: BackupDestination::Local {
+                    path: temp_dir.path().display().to_string(),
+                },
+                target_path: temp_dir.path().join("restored").display().to_string(),
+                decryption_key: None,
+                point_in_time: None,
+                parallel_workers: 1,
+                verify_checksums: true,
+            })
+            .await
+            .unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "restore is not implemented (roadmap: unscheduled)"
+        );
     }
 
     #[tokio::test]

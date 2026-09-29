@@ -5,8 +5,10 @@
 //! answers `501 Not Implemented` on the matching admin routes.
 //!
 //! [`NotImplemented`] lists every feature that minikv announces but does not
-//! implement, including the HTTP ones (backups, restores, TTL), so that the
-//! `501` bodies and the CLI messages always agree.
+//! implement, including the HTTP ones (backups, restores, TTL) and the library
+//! ones (Kubernetes operator, io_uring, Kafka sink, downsampling, tiering
+//! compression), so that the `501` bodies, the CLI messages and the library
+//! errors always agree.
 
 pub mod compact;
 pub mod repair;
@@ -80,6 +82,31 @@ impl NotImplemented {
     /// Expiration of objects through the `X-Minikv-TTL` header.
     pub const TTL: Self = Self {
         feature: "ttl",
+        roadmap: UNSCHEDULED,
+    };
+    /// The controller of the `MiniKVCluster` Kubernetes resources.
+    pub const K8S_OPERATOR: Self = Self {
+        feature: "kubernetes operator",
+        roadmap: UNSCHEDULED,
+    };
+    /// Asynchronous I/O through Linux io_uring.
+    pub const IO_URING: Self = Self {
+        feature: "io_uring",
+        roadmap: UNSCHEDULED,
+    };
+    /// Sending change data capture events to Kafka.
+    pub const KAFKA_SINK: Self = Self {
+        feature: "kafka sink",
+        roadmap: UNSCHEDULED,
+    };
+    /// Downsampling of the time series.
+    pub const DOWNSAMPLING: Self = Self {
+        feature: "downsampling",
+        roadmap: UNSCHEDULED,
+    };
+    /// Compression of the data in the warm, cold and archive tiers.
+    pub const TIERING_COMPRESSION: Self = Self {
+        feature: "tiering compression",
         roadmap: UNSCHEDULED,
     };
 }

@@ -1,6 +1,13 @@
-//! Data tiering (hot/warm/cold/archive).
+//! Bookkeeping for data tiering (hot, warm, cold and archive).
+//!
+//! [`TieringManager`] records which tier each tracked key belongs to, and
+//! evaluates the policies that would move keys between tiers. Nothing in
+//! minikv uses it, and no tier stores data: [`TieringManager::apply_change`]
+//! only updates the records, and [`compress`] fails for every algorithm but
+//! `None`. Of the configuration, only `policies` is read.
 
 use crate::common::{Error, Result};
+use crate::ops::NotImplemented;
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -62,9 +69,11 @@ pub struct TierConfig {
     #[serde(default)]
     pub max_items: u64,
 
+    /// Not applied: no tier stores data, so nothing is compressed.
     #[serde(default)]
     pub compression: bool,
 
+    /// Not applied: see `compression`.
     #[serde(default)]
     pub compression_algorithm: CompressionAlgorithm,
 
@@ -333,6 +342,8 @@ pub struct TierStats {
 
     pub total_demotions: u64,
 
+    /// Size of the keys whose tier [`TieringManager::apply_change`] changed.
+    /// No data is actually moved.
     pub bytes_moved: u64,
 }
 
@@ -537,6 +548,8 @@ impl TieringManager {
         }
     }
 
+    /// Records that `change.key` now belongs to `change.to_tier`, and updates
+    /// the statistics. No data is moved: no tier stores data.
     pub fn apply_change(&self, change: &TierChange) -> Result<()> {
         let mut items = self.metadata.write().unwrap();
         if let Some(metadata) = items.get_mut(&change.key) {
@@ -607,23 +620,27 @@ impl TieringManager {
     }
 }
 
+/// Returns `data` unchanged for `None`. The other algorithms are not
+/// implemented, and fail.
 pub fn compress(data: &[u8], algorithm: CompressionAlgorithm) -> Result<Vec<u8>> {
     match algorithm {
         CompressionAlgorithm::None => Ok(data.to_vec()),
-        CompressionAlgorithm::Lz4 => Ok(data.to_vec()),
-        CompressionAlgorithm::Zstd => Ok(data.to_vec()),
-        CompressionAlgorithm::Snappy => Ok(data.to_vec()),
-        CompressionAlgorithm::Gzip => Ok(data.to_vec()),
+        CompressionAlgorithm::Lz4
+        | CompressionAlgorithm::Zstd
+        | CompressionAlgorithm::Snappy
+        | CompressionAlgorithm::Gzip => Err(NotImplemented::TIERING_COMPRESSION.into()),
     }
 }
 
+/// Returns `data` unchanged for `None`. The other algorithms are not
+/// implemented, and fail.
 pub fn decompress(data: &[u8], algorithm: CompressionAlgorithm) -> Result<Vec<u8>> {
     match algorithm {
         CompressionAlgorithm::None => Ok(data.to_vec()),
-        CompressionAlgorithm::Lz4 => Ok(data.to_vec()),
-        CompressionAlgorithm::Zstd => Ok(data.to_vec()),
-        CompressionAlgorithm::Snappy => Ok(data.to_vec()),
-        CompressionAlgorithm::Gzip => Ok(data.to_vec()),
+        CompressionAlgorithm::Lz4
+        | CompressionAlgorithm::Zstd
+        | CompressionAlgorithm::Snappy
+        | CompressionAlgorithm::Gzip => Err(NotImplemented::TIERING_COMPRESSION.into()),
     }
 }
 
@@ -717,6 +734,29 @@ mod tests {
         assert_eq!(stats.hot.item_count, 0);
         assert_eq!(stats.warm.item_count, 1);
         assert_eq!(stats.total_demotions, 1);
+    }
+
+    #[test]
+    fn only_the_none_algorithm_is_implemented() {
+        let data = b"minikv";
+        assert_eq!(compress(data, CompressionAlgorithm::None).unwrap(), data);
+        assert_eq!(decompress(data, CompressionAlgorithm::None).unwrap(), data);
+
+        for algorithm in [
+            CompressionAlgorithm::Lz4,
+            CompressionAlgorithm::Zstd,
+            CompressionAlgorithm::Snappy,
+            CompressionAlgorithm::Gzip,
+        ] {
+            for result in [compress(data, algorithm), decompress(data, algorithm)] {
+                assert_eq!(
+                    result.unwrap_err().to_string(),
+                    "tiering compression is not implemented (roadmap: unscheduled)",
+                    "{:?}",
+                    algorithm
+                );
+            }
+        }
     }
 
     #[test]

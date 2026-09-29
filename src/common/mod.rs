@@ -31,9 +31,12 @@ pub use auth_middleware::{
 };
 pub use config::{Config, CoordinatorConfig, NodeRole, RuntimeConfig, VolumeConfig, WalSyncPolicy};
 pub use encryption::{
-    maybe_decrypt, maybe_encrypt, EncryptedData, EncryptionConfig, EncryptionError,
-    EncryptionManager, EncryptionResult, EncryptionStatus, ENCRYPTION_MANAGER,
+    EncryptedData, EncryptionConfig, EncryptionError, EncryptionManager, EncryptionResult,
+    EncryptionStatus, ENCRYPTION_MANAGER,
 };
+// Deprecated since 2.0.1, still exported for compatibility.
+#[allow(deprecated)]
+pub use encryption::{maybe_decrypt, maybe_encrypt};
 pub use error::{Error, Result};
 pub use hash::{blake3_hash, hrw_hash, select_replicas, shard_key, Blake3Hasher};
 // Deprecated since 2.0.1, still exported for compatibility.

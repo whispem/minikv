@@ -1,4 +1,7 @@
-//! Transparent encryption at rest using AES-256-GCM.
+//! AES-256-GCM encryption primitives, with keys derived by HKDF-SHA256.
+//!
+//! minikv does not encrypt data at rest: no code of the volumes, of the WAL
+//! or of the metadata store calls this module, so values are stored as sent.
 
 use aes_gcm::{
     aead::{Aead, KeyInit},
@@ -26,6 +29,8 @@ pub static ENCRYPTION_MANAGER: Lazy<RwLock<EncryptionManager>> =
 pub struct EncryptionConfig {
     pub enabled: bool,
     pub master_key: Option<String>,
+    /// Not read: [`EncryptionManager::initialize`] always derives two keys,
+    /// with the contexts `minikv-data` and `minikv-wal`.
     pub key_contexts: Vec<String>,
 }
 
@@ -314,6 +319,12 @@ pub struct EncryptionStatus {
     pub key_derivation: Option<String>,
 }
 
+/// Encrypts `data` with [`ENCRYPTION_MANAGER`] when it is enabled. When
+/// encryption fails, returns `data` unencrypted, without telling.
+#[deprecated(
+    since = "2.0.1",
+    note = "returns the data unencrypted when encryption fails; use EncryptionManager::encrypt_bytes"
+)]
 pub fn maybe_encrypt(data: &[u8]) -> Vec<u8> {
     let manager = ENCRYPTION_MANAGER.read().unwrap();
     manager
@@ -321,6 +332,12 @@ pub fn maybe_encrypt(data: &[u8]) -> Vec<u8> {
         .unwrap_or_else(|_| data.to_vec())
 }
 
+/// Decrypts `data` with [`ENCRYPTION_MANAGER`] when it is enabled. When
+/// decryption fails, returns `data` still encrypted, without telling.
+#[deprecated(
+    since = "2.0.1",
+    note = "returns the data still encrypted when decryption fails; use EncryptionManager::decrypt_bytes"
+)]
 pub fn maybe_decrypt(data: &[u8]) -> Vec<u8> {
     let manager = ENCRYPTION_MANAGER.read().unwrap();
     manager

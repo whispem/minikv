@@ -1,4 +1,11 @@
-//! Cross-datacenter replication with async replication and conflict resolution.
+//! Cross-datacenter replication primitives: vector clocks, conflict
+//! resolution, and a manager that queues replication events.
+//!
+//! Nothing in minikv replicates across datacenters: [`init_replication`] has
+//! no caller, so `/admin/replication/status` reports replication as not
+//! configured, and nothing reads the channel that
+//! [`ReplicationManager::queue_event`] feeds, so no event reaches a remote
+//! datacenter.
 
 use crate::common::{Error, Result};
 use chrono::{DateTime, Utc};
@@ -90,6 +97,8 @@ pub enum ConflictResolution {
 
     LocalFirst,
 
+    /// The event of the datacenter `dc1` wins; between two other
+    /// datacenters, the latest event wins.
     PrimaryFirst,
 }
 
@@ -168,6 +177,10 @@ pub enum ReplicationEventType {
     Snapshot,
 }
 
+/// The replication state of one remote datacenter, as recorded with
+/// [`ReplicationManager::update_status`]. Nothing in minikv records it: a
+/// remote datacenter starts unhealthy, with `last_error` saying that it was
+/// never contacted, and stays so.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReplicationStatus {
     pub dc_id: DatacenterId,
@@ -176,14 +189,19 @@ pub struct ReplicationStatus {
 
     pub last_replicated_at: Option<DateTime<Utc>>,
 
+    /// Not measured: 0 unless [`ReplicationManager::update_status`] sets it.
     pub lag_secs: u64,
 
+    /// Not counted: 0 unless [`ReplicationManager::update_status`] sets it.
     pub pending_events: usize,
 
     pub healthy: bool,
 
     pub last_error: Option<String>,
 }
+
+/// `last_error` of a remote datacenter that was never contacted.
+const NEVER_CONTACTED: &str = "never contacted: minikv sends no event to remote datacenters";
 
 pub struct ReplicationManager {
     config: ReplicationConfig,
@@ -211,8 +229,8 @@ impl ReplicationManager {
                     last_replicated_at: None,
                     lag_secs: 0,
                     pending_events: 0,
-                    healthy: true,
-                    last_error: None,
+                    healthy: false,
+                    last_error: Some(NEVER_CONTACTED.to_string()),
                 },
             );
         }
@@ -228,6 +246,8 @@ impl ReplicationManager {
         (manager, event_rx)
     }
 
+    /// Sends `event` to the channel returned by [`ReplicationManager::new`],
+    /// and keeps a copy in memory. Nothing in minikv reads either of them.
     pub async fn queue_event(&self, event: ReplicationEvent) -> Result<()> {
         self.event_tx
             .send(event.clone())
@@ -336,6 +356,9 @@ impl ReplicationManager {
         &self.config
     }
 
+    /// `true` when every remote datacenter is healthy and within
+    /// `max_lag_secs`. Remote datacenters start unhealthy: only
+    /// [`ReplicationManager::update_status`] changes that.
     pub fn is_healthy(&self) -> bool {
         self.status
             .read()
@@ -344,6 +367,7 @@ impl ReplicationManager {
             .all(|s| s.healthy && s.lag_secs <= self.config.max_lag_secs)
     }
 
+    /// Sets a flag that nothing reads: the manager runs no task to stop.
     pub fn shutdown(&self) {
         *self.shutdown.write().unwrap() = true;
     }
@@ -371,6 +395,30 @@ pub fn get_replication_manager(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn remote_datacenters_start_unhealthy() {
+        let config = ReplicationConfig {
+            remote_dcs: vec![RemoteDatacenter {
+                id: "dc2".to_string(),
+                name: "Second".to_string(),
+                endpoints: vec!["http://dc2:5000".to_string()],
+                priority: 0,
+                region: String::new(),
+                read_only: false,
+            }],
+            ..Default::default()
+        };
+        let (manager, _events) = ReplicationManager::new(config);
+
+        let status = manager.get_dc_status("dc2").unwrap();
+        assert!(!status.healthy);
+        assert_eq!(status.last_error.as_deref(), Some(NEVER_CONTACTED));
+        assert!(!manager.is_healthy());
+
+        let (alone, _events) = ReplicationManager::new(ReplicationConfig::default());
+        assert!(alone.is_healthy());
+    }
 
     #[test]
     fn test_vector_clock_increment() {

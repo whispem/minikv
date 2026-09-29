@@ -1,10 +1,11 @@
-impl Default for MemStore {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-///
-/// Supports in-memory, RocksDB, and Sled backends. Used for S3/data paths.
+//! A small key-value interface, [`KVStore`], with an in-memory backend and,
+//! behind the `rocksdb` and `sled-backend` features, RocksDB and Sled ones.
+//!
+//! No data path of minikv uses it: the coordinator keeps the metadata in its
+//! own RocksDB store, and the volume servers keep the values, S3 objects
+//! included, in their segment files. The RocksDB and Sled backends panic on
+//! I/O errors.
+
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -28,6 +29,12 @@ impl MemStore {
         Self {
             map: Mutex::new(HashMap::new()),
         }
+    }
+}
+
+impl Default for MemStore {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

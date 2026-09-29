@@ -1,6 +1,15 @@
-//! Change Data Capture - captures data changes and streams them to sinks.
+//! Change data capture primitives: events, sinks, and a manager that turns
+//! changes into events.
+//!
+//! Nothing in minikv captures changes: no write path calls the `capture_*`
+//! methods of [`CDCManager`], and [`init_cdc`] has no caller, so
+//! `/admin/cdc/status` reports CDC as not configured. The manager does not
+//! deliver the events it captures either: they go to the channel returned by
+//! [`CDCManager::new`], which nothing in minikv reads. The Kafka sink is not
+//! implemented.
 
 use crate::common::{Error, Result};
+use crate::ops::NotImplemented;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -390,7 +399,11 @@ impl CDCManager {
         self.sinks.push(sink);
     }
 
+    /// Adds a sink for each entry of `sinks` in the configuration. Fails,
+    /// and adds none, when one of them cannot be created: a file that cannot
+    /// be opened, or a Kafka sink, which is not implemented.
     pub fn create_sinks_from_config(&mut self) -> Result<()> {
+        let mut sinks = Vec::with_capacity(self.config.sinks.len());
         for sink_config in &self.config.sinks {
             let sink: Arc<dyn CDCSink> = match sink_config {
                 SinkConfig::Webhook {
@@ -406,12 +419,11 @@ impl CDCManager {
                 )),
                 SinkConfig::File { path, .. } => Arc::new(FileSink::new(path.clone())?),
                 SinkConfig::Memory { max_events } => Arc::new(MemorySink::new(*max_events)),
-                SinkConfig::Kafka { .. } => {
-                    continue;
-                }
+                SinkConfig::Kafka { .. } => return Err(NotImplemented::KAFKA_SINK.into()),
             };
-            self.sinks.push(sink);
+            sinks.push(sink);
         }
+        self.sinks.extend(sinks);
         Ok(())
     }
 
@@ -545,6 +557,12 @@ impl CDCManager {
         Ok(())
     }
 
+    /// Sends the events of the internal buffer to every sink, and empties
+    /// the buffer. Nothing fills that buffer: the `capture_*` methods send
+    /// their events to the channel returned by [`CDCManager::new`].
+    ///
+    /// Fails when a sink fails, and names each failed sink. The events are
+    /// not kept: the sinks that succeeded have them, the failed ones do not.
     pub async fn flush(&self) -> Result<()> {
         let events: Vec<CDCEvent> = {
             let mut buffer = self.buffer.write().unwrap();
@@ -555,13 +573,22 @@ impl CDCManager {
             return Ok(());
         }
 
+        let mut failures = Vec::new();
         for sink in &self.sinks {
             if let Err(e) = sink.send(events.clone()).await {
-                tracing::error!("CDC sink {} failed: {}", sink.name(), e);
+                failures.push(format!("{}: {}", sink.name(), e));
             }
         }
 
-        Ok(())
+        if failures.is_empty() {
+            Ok(())
+        } else {
+            Err(Error::Other(format!(
+                "{} CDC events not delivered to {}",
+                events.len(),
+                failures.join("; ")
+            )))
+        }
     }
 
     pub fn current_sequence(&self) -> u64 {
@@ -581,9 +608,14 @@ impl CDCManager {
 pub static CDC_MANAGER: once_cell::sync::Lazy<RwLock<Option<CDCManager>>> =
     once_cell::sync::Lazy::new(|| RwLock::new(None));
 
+/// Installs a [`CDCManager`] built from `config` in [`CDC_MANAGER`], and
+/// returns the channel of its events. When the sinks of `config` cannot be
+/// created, the error is logged and the manager has no sink.
 pub fn init_cdc(config: CDCConfig) -> mpsc::Receiver<CDCEvent> {
     let (mut manager, rx) = CDCManager::new(config);
-    let _ = manager.create_sinks_from_config();
+    if let Err(e) = manager.create_sinks_from_config() {
+        tracing::error!("CDC sinks not created: {}", e);
+    }
     *CDC_MANAGER.write().unwrap() = Some(manager);
     rx
 }
@@ -622,6 +654,81 @@ mod tests {
         let events = sink.get_events();
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].key, "test-key");
+    }
+
+    fn event(key: &str) -> CDCEvent {
+        CDCEvent {
+            id: key.to_string(),
+            sequence: 1,
+            timestamp: Utc::now(),
+            operation: CDCOperation::Insert,
+            key: key.to_string(),
+            old_value: None,
+            new_value: Some(b"value".to_vec()),
+            tenant: None,
+            metadata: CDCMetadata::default(),
+        }
+    }
+
+    struct FailingSink;
+
+    #[async_trait]
+    impl CDCSink for FailingSink {
+        fn name(&self) -> &str {
+            "failing"
+        }
+
+        async fn send(&self, _events: Vec<CDCEvent>) -> Result<()> {
+            Err(Error::Other("unreachable".to_string()))
+        }
+
+        async fn health_check(&self) -> Result<bool> {
+            Ok(false)
+        }
+    }
+
+    #[test]
+    fn a_kafka_sink_is_refused() {
+        let config = CDCConfig {
+            sinks: vec![
+                SinkConfig::Memory { max_events: 10 },
+                SinkConfig::Kafka {
+                    brokers: vec!["localhost:9092".to_string()],
+                    topic: "minikv".to_string(),
+                    client_id: None,
+                },
+            ],
+            ..Default::default()
+        };
+        let (mut manager, _events) = CDCManager::new(config);
+
+        let error = manager.create_sinks_from_config().unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "kafka sink is not implemented (roadmap: unscheduled)"
+        );
+        assert!(manager.sinks.is_empty());
+    }
+
+    #[tokio::test]
+    async fn flush_reports_the_sinks_that_failed() {
+        let (mut manager, _events) = CDCManager::new(CDCConfig::default());
+        let memory = Arc::new(MemorySink::new(10));
+        manager.add_sink(memory.clone());
+        manager.add_sink(Arc::new(FailingSink));
+        manager
+            .buffer
+            .write()
+            .unwrap()
+            .extend([event("a"), event("b")]);
+
+        let error = manager.flush().await.unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "2 CDC events not delivered to failing: unreachable"
+        );
+        assert_eq!(memory.get_events().len(), 2);
+        assert!(manager.buffer.read().unwrap().is_empty());
     }
 
     #[tokio::test]

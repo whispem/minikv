@@ -1,6 +1,13 @@
-//! Time-series storage engine.
+//! In-memory time-series engine, behind the coordinator's `/ts/write` and
+//! `/ts/query` endpoints.
+//!
+//! Each series keeps its points in one block per hour, in time order. The
+//! points live in the memory of the coordinator that received them: they are
+//! not replicated to the other coordinators, and a restart loses them.
+//! Nothing applies the retention or the downsampling of the configuration.
 
 use crate::common::{Error, Result};
+use crate::ops::NotImplemented;
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
@@ -8,21 +15,30 @@ use std::sync::{Arc, RwLock};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TimeseriesConfig {
+    /// Not read: the coordinator starts the engine on the first time-series
+    /// request.
     #[serde(default)]
     pub enabled: bool,
 
+    /// Age after which [`TimeseriesEngine::run_retention`] drops points.
+    /// Nothing calls it, so points are kept until the coordinator stops.
     #[serde(default = "default_retention_days")]
     pub retention_days: u32,
 
+    /// Not applied: downsampling is not implemented, and
+    /// [`TimeseriesEngine::run_downsampling`] fails.
     #[serde(default)]
     pub downsample_rules: Vec<DownsampleRule>,
 
     #[serde(default)]
     pub compression: CompressionConfig,
 
+    /// Not enforced: a query returns every matching point, up to its own
+    /// `limit`.
     #[serde(default = "default_max_points")]
     pub max_points_per_query: usize,
 
+    /// Not used: no background job runs the retention or the downsampling.
     #[serde(default = "default_job_interval")]
     pub job_interval_secs: u64,
 }
@@ -134,14 +150,18 @@ pub enum Aggregation {
     Last,
 }
 
+/// How the engine encodes the points of a block.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompressionConfig {
+    /// Stores each timestamp as the difference from the previous one.
     #[serde(default = "default_true")]
     pub delta_encoding: bool,
 
+    /// Not implemented: ignored.
     #[serde(default = "default_true")]
     pub run_length_encoding: bool,
 
+    /// Not implemented: ignored.
     #[serde(default = "default_true")]
     pub gorilla_compression: bool,
 }
@@ -247,6 +267,7 @@ pub struct TimeseriesEngine {
     index: Arc<RwLock<HashMap<String, Vec<String>>>>,
 }
 
+/// The points of one series during one hour, in time order.
 #[derive(Debug, Clone)]
 pub struct CompressedBlock {
     pub start_ts: i64,
@@ -267,6 +288,9 @@ impl TimeseriesEngine {
         }
     }
 
+    /// Adds the points of `series` to the blocks of their hours, next to the
+    /// points already there. Points with the same timestamp are all kept, in
+    /// the order they were written.
     pub fn write(&self, series: &TimeSeries) -> Result<()> {
         if series.points.is_empty() {
             return Ok(());
@@ -274,29 +298,53 @@ impl TimeseriesEngine {
 
         let series_key = self.series_key(&series.metric, &series.tags);
 
-        {
-            let mut index = self.index.write().unwrap();
-            index
-                .entry(series.metric.clone())
+        let mut by_hour: BTreeMap<i64, Vec<DataPoint>> = BTreeMap::new();
+        for point in &series.points {
+            by_hour
+                .entry(Resolution::Hour.align(point.timestamp))
                 .or_default()
-                .push(series_key.clone());
+                .push(*point);
         }
 
-        let compressed = self.compress_points(&series.points)?;
+        {
+            let mut data = self.data.write().unwrap();
+            let mut blocks = Vec::with_capacity(by_hour.len());
+            for (hour, new_points) in by_hour {
+                let stored = data.get(&series_key).and_then(|blocks| blocks.get(&hour));
+                let mut points = match stored {
+                    Some(block) => self.decompress_block(block)?,
+                    None => Vec::new(),
+                };
+                points.extend(new_points);
+                // A stable sort: equal timestamps keep their write order.
+                points.sort_by_key(|point| point.timestamp);
+                blocks.push((hour, self.compress_points(&points)?));
+            }
+            data.entry(series_key.clone()).or_default().extend(blocks);
+        }
 
-        let mut data = self.data.write().unwrap();
-        let metric_data = data.entry(series_key).or_default();
-
-        let bucket_ts = Resolution::Hour.align(series.points[0].timestamp);
-        metric_data.insert(bucket_ts, compressed);
+        let mut index = self.index.write().unwrap();
+        let series_keys = index.entry(series.metric.clone()).or_default();
+        if !series_keys.contains(&series_key) {
+            series_keys.push(series_key);
+        }
 
         Ok(())
     }
 
+    /// Returns the points of the series that match `query.metric` and
+    /// `query.tags`, with `start <= timestamp < end`, in time order. With both
+    /// `aggregation` and `resolution`, each series gets one point per
+    /// `resolution` interval. `limit` keeps the first points of each series.
     pub fn query(&self, query: &TimeseriesQuery) -> Result<TimeseriesResult> {
         let start = std::time::Instant::now();
         let start_ts = query.start.timestamp_millis();
         let end_ts = query.end.timestamp_millis();
+        // A block is keyed by the start of its hour: the points of the range
+        // are in the blocks of the hours from `start_ts` to `end_ts`. An empty
+        // range holds no point (and `BTreeMap::range` would panic).
+        let hours = (start_ts < end_ts)
+            .then(|| Resolution::Hour.align(start_ts)..=Resolution::Hour.align(end_ts));
 
         let data = self.data.read().unwrap();
         let mut results = Vec::new();
@@ -314,13 +362,15 @@ impl TimeseriesEngine {
 
             let mut points = Vec::new();
 
-            for (_bucket_ts, block) in buckets.range(start_ts..=end_ts) {
-                points_scanned += block.count as u64;
+            if let Some(hours) = &hours {
+                for (_hour, block) in buckets.range(hours.clone()) {
+                    points_scanned += block.count as u64;
 
-                let block_points = self.decompress_block(block)?;
-                for point in block_points {
-                    if point.timestamp >= start_ts && point.timestamp < end_ts {
-                        points.push(point);
+                    let block_points = self.decompress_block(block)?;
+                    for point in block_points {
+                        if point.timestamp >= start_ts && point.timestamp < end_ts {
+                            points.push(point);
+                        }
                     }
                 }
             }
@@ -571,6 +621,9 @@ impl TimeseriesEngine {
         tags
     }
 
+    /// Drops the blocks whose hour started more than `retention_days` ago,
+    /// and returns the number of points they held. Nothing calls it: the
+    /// points are kept until the coordinator stops.
     pub fn run_retention(&self) -> Result<u64> {
         let cutoff = Utc::now() - Duration::days(self.config.retention_days as i64);
         let cutoff_ts = cutoff.timestamp_millis();
@@ -591,26 +644,10 @@ impl TimeseriesEngine {
         Ok(deleted)
     }
 
+    /// Downsampling is not implemented: this always fails, and the
+    /// `downsample_rules` of the configuration are not applied.
     pub fn run_downsampling(&self) -> Result<u64> {
-        let now = Utc::now();
-        let mut downsampled = 0u64;
-
-        for rule in &self.config.downsample_rules {
-            let cutoff = now - rule.after;
-            let cutoff_ts = cutoff.timestamp_millis();
-
-            let data = self.data.read().unwrap();
-
-            for buckets in data.values() {
-                for (_bucket_ts, block) in buckets.range(..cutoff_ts) {
-                    if block.count > 1 {
-                        downsampled += block.count as u64;
-                    }
-                }
-            }
-        }
-
-        Ok(downsampled)
+        Err(NotImplemented::DOWNSAMPLING.into())
     }
 
     pub fn stats(&self) -> TimeseriesStats {
@@ -643,7 +680,10 @@ pub struct TimeseriesStats {
     pub total_series: usize,
     pub total_points: usize,
     pub total_bytes: usize,
+    /// `retention_days` of the configuration, which nothing applies.
     pub retention_days: u32,
+    /// Number of downsampling rules in the configuration, which nothing
+    /// applies.
     pub downsample_rules: usize,
 }
 
@@ -751,5 +791,158 @@ mod tests {
         assert!(engine.matches_metric("cpu.usage", "*.usage"));
         assert!(engine.matches_metric("cpu.usage", "cpu.usage"));
         assert!(!engine.matches_metric("memory.free", "cpu.*"));
+    }
+
+    const MIN: i64 = 60_000;
+    const HOUR: i64 = 60 * MIN;
+    /// 2023-11-14T23:00:00Z, the start of an hour.
+    const H: i64 = 1_700_002_800_000;
+
+    fn series(metric: &str, points: &[(i64, f64)]) -> TimeSeries {
+        let mut series = TimeSeries::new(metric);
+        for &(timestamp, value) in points {
+            series.add_point(DataPoint::new(timestamp, value));
+        }
+        series
+    }
+
+    /// The points of `metric` with `start <= timestamp < end`.
+    fn read(engine: &TimeseriesEngine, metric: &str, start: i64, end: i64) -> Vec<(i64, f64)> {
+        let result = engine
+            .query(&TimeseriesQuery {
+                metric: metric.to_string(),
+                start: DateTime::from_timestamp_millis(start).unwrap(),
+                end: DateTime::from_timestamp_millis(end).unwrap(),
+                tags: HashMap::new(),
+                aggregation: None,
+                resolution: None,
+                limit: None,
+            })
+            .unwrap();
+        result
+            .series
+            .iter()
+            .flat_map(|series| series.points.iter().map(|p| (p.timestamp, p.value)))
+            .collect()
+    }
+
+    #[test]
+    fn a_second_write_in_the_same_hour_keeps_the_first() {
+        let engine = TimeseriesEngine::new(TimeseriesConfig::default());
+        engine
+            .write(&series("cpu", &[(H + 10 * MIN, 1.0)]))
+            .unwrap();
+        engine
+            .write(&series("cpu", &[(H + 30 * MIN, 2.0)]))
+            .unwrap();
+
+        assert_eq!(
+            read(&engine, "cpu", H, H + HOUR),
+            [(H + 10 * MIN, 1.0), (H + 30 * MIN, 2.0)]
+        );
+        assert_eq!(engine.stats().total_points, 2);
+    }
+
+    #[test]
+    fn a_query_that_starts_inside_an_hour_finds_its_points() {
+        let engine = TimeseriesEngine::new(TimeseriesConfig::default());
+        engine
+            .write(&series("cpu", &[(H + 10 * MIN, 1.0), (H + 30 * MIN, 2.0)]))
+            .unwrap();
+
+        assert_eq!(
+            read(&engine, "cpu", H + 20 * MIN, H + HOUR),
+            [(H + 30 * MIN, 2.0)]
+        );
+    }
+
+    #[test]
+    fn a_write_across_hours_files_each_point_under_its_hour() {
+        let engine = TimeseriesEngine::new(TimeseriesConfig::default());
+        engine
+            .write(&series("cpu", &[(H + 50 * MIN, 1.0), (H + 70 * MIN, 2.0)]))
+            .unwrap();
+        engine
+            .write(&series("cpu", &[(H + 80 * MIN, 3.0)]))
+            .unwrap();
+
+        assert_eq!(
+            read(&engine, "cpu", H + HOUR, H + 2 * HOUR),
+            [(H + 70 * MIN, 2.0), (H + 80 * MIN, 3.0)]
+        );
+        assert_eq!(read(&engine, "cpu", H, H + 2 * HOUR).len(), 3);
+    }
+
+    #[test]
+    fn points_come_back_in_time_order_and_equal_timestamps_are_kept() {
+        let engine = TimeseriesEngine::new(TimeseriesConfig::default());
+        engine
+            .write(&series("cpu", &[(H + 30 * MIN, 1.0), (H + 10 * MIN, 2.0)]))
+            .unwrap();
+        engine
+            .write(&series("cpu", &[(H + 10 * MIN, 3.0), (H + 20 * MIN, 4.0)]))
+            .unwrap();
+
+        assert_eq!(
+            read(&engine, "cpu", H, H + HOUR),
+            [
+                (H + 10 * MIN, 2.0),
+                (H + 10 * MIN, 3.0),
+                (H + 20 * MIN, 4.0),
+                (H + 30 * MIN, 1.0),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_query_that_ends_before_it_starts_finds_nothing() {
+        let engine = TimeseriesEngine::new(TimeseriesConfig::default());
+        engine
+            .write(&series("cpu", &[(H + 10 * MIN, 1.0)]))
+            .unwrap();
+
+        assert_eq!(read(&engine, "cpu", H + HOUR, H), []);
+        assert_eq!(read(&engine, "cpu", H, H), []);
+    }
+
+    #[test]
+    fn points_before_1970_are_found() {
+        let engine = TimeseriesEngine::new(TimeseriesConfig::default());
+        engine
+            .write(&series("cpu", &[(-5 * MIN, 1.0), (-61 * MIN, 2.0)]))
+            .unwrap();
+
+        assert_eq!(read(&engine, "cpu", -10 * MIN, -MIN), [(-5 * MIN, 1.0)]);
+        assert_eq!(
+            read(&engine, "cpu", -2 * HOUR, 0),
+            [(-61 * MIN, 2.0), (-5 * MIN, 1.0)]
+        );
+    }
+
+    #[test]
+    fn the_index_lists_each_series_once() {
+        let engine = TimeseriesEngine::new(TimeseriesConfig::default());
+        for value in [1.0, 2.0] {
+            engine
+                .write(&series("cpu", &[(H, value)]).with_tag("host", "a"))
+                .unwrap();
+        }
+        engine.write(&series("cpu", &[(H, 3.0)])).unwrap();
+
+        let index = engine.index.read().unwrap();
+        assert_eq!(index["cpu"], ["cpu|host=a", "cpu"]);
+    }
+
+    #[test]
+    fn downsampling_fails_instead_of_counting_points() {
+        let engine = TimeseriesEngine::new(TimeseriesConfig::default());
+        engine.write(&series("cpu", &[(0, 1.0), (1, 2.0)])).unwrap();
+
+        let error = engine.run_downsampling().unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "downsampling is not implemented (roadmap: unscheduled)"
+        );
+        assert_eq!(read(&engine, "cpu", 0, 2), [(0, 1.0), (1, 2.0)]);
     }
 }

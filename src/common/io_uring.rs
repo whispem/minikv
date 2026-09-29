@@ -1,6 +1,14 @@
-//! io_uring I/O backend (Linux 5.1+).
+//! Configuration and request queue for an io_uring backend that minikv does
+//! not have.
+//!
+//! Nothing in minikv uses this module, and it performs no asynchronous I/O:
+//! [`IoUring::new`] and [`UringFile::open`] fail when `enabled` is set,
+//! [`IoUring::flush`] answers every queued request with `-ENOSYS`, and
+//! [`IoUring::is_enabled`] is always `false`. [`UringFile`] reads and writes
+//! with standard blocking I/O.
 
 use crate::common::{Error, Result};
+use crate::ops::NotImplemented;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::fs::File;
@@ -9,7 +17,8 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
-/// io_uring configuration
+/// Settings of the io_uring backend. Only `enabled` has an effect, and it
+/// must stay `false`: minikv has no io_uring backend.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IoUringConfig {
     #[serde(default)]
@@ -109,91 +118,71 @@ pub struct IoRequest {
     pub user_data: u64,
 }
 
+/// `ENOSYS` ("function not implemented") on Linux, the only system with
+/// io_uring.
+const ENOSYS: i32 = 38;
+
 #[derive(Debug)]
 pub struct IoResult {
     pub user_data: u64,
 
+    /// What io_uring would return: the number of bytes transferred, or a
+    /// negative error number. Always `-ENOSYS` (-38) here.
     pub result: i32,
 
     pub op: IoOpType,
 }
 
-/// io_uring interface (abstraction for platform compatibility)
+/// A queue of I/O requests that are never executed: see the module
+/// documentation.
 pub struct IoUring {
-    config: IoUringConfig,
-
     pending: VecDeque<IoRequest>,
 
     stats: Arc<IoUringStats>,
-
-    available: bool,
 }
 
-/// io_uring statistics
+/// Counters of an [`IoUring`] queue.
 #[derive(Debug, Default)]
 pub struct IoUringStats {
+    /// Requests queued by the `submit_*` methods.
     pub submissions: AtomicU64,
 
+    /// Results returned by [`IoUring::flush`], all `-ENOSYS`.
     pub completions: AtomicU64,
 
+    /// Never updated: no request reads anything.
     pub bytes_read: AtomicU64,
 
+    /// Never updated: no request writes anything.
     pub bytes_written: AtomicU64,
 
+    /// Never updated: nothing is submitted to the kernel.
     pub batched_submissions: AtomicU64,
 
+    /// Never updated: nothing is submitted to the kernel.
     pub avg_batch_size: AtomicU64,
 
+    /// Never updated: there is no kernel polling thread.
     pub poll_wakeups: AtomicU64,
 }
 
 impl IoUring {
+    /// Creates an empty queue. Fails when `config.enabled` is set: minikv has
+    /// no io_uring backend.
     pub fn new(config: IoUringConfig) -> Result<Self> {
-        let available = Self::check_availability();
-
-        if config.enabled && !available {
-            tracing::warn!("io_uring requested but not available, falling back to standard I/O");
+        if config.enabled {
+            return Err(NotImplemented::IO_URING.into());
         }
 
         Ok(Self {
-            config,
             pending: VecDeque::new(),
             stats: Arc::new(IoUringStats::default()),
-            available,
         })
     }
 
-    fn check_availability() -> bool {
-        #[cfg(target_os = "linux")]
-        {
-            use std::fs;
-            if let Ok(version) = fs::read_to_string("/proc/version") {
-                if let Some(ver) = version.split_whitespace().nth(2) {
-                    let parts: Vec<&str> = ver.split('.').collect();
-                    if parts.len() >= 2 {
-                        let major: u32 = parts[0].parse().unwrap_or(0);
-                        let minor: u32 = parts[1]
-                            .chars()
-                            .take_while(|c| c.is_ascii_digit())
-                            .collect::<String>()
-                            .parse()
-                            .unwrap_or(0);
-
-                        return major > 5 || (major == 5 && minor >= 1);
-                    }
-                }
-            }
-            false
-        }
-
-        #[cfg(not(target_os = "linux"))]
-        {
-            false
-        }
-    }
-
+    /// Always `false`: minikv has no io_uring backend.
     pub fn is_enabled(&self) -> bool {
-        self.config.enabled && self.available
+        false
     }
 
     pub fn submit_read(&mut self, fd: i32, offset: u64, len: usize, user_data: u64) {
@@ -235,59 +224,25 @@ impl IoUring {
         self.stats.submissions.fetch_add(1, Ordering::Relaxed);
     }
 
+    /// Empties the queue and answers every request with `-ENOSYS`, the error
+    /// io_uring gives for an unsupported operation: nothing is read, written
+    /// or synced.
     pub fn flush(&mut self) -> Vec<IoResult> {
-        let results = self.flush_sync();
-
-        let count = results.len() as u64;
-        if count > 0 {
-            self.stats
-                .batched_submissions
-                .fetch_add(1, Ordering::Relaxed);
-            self.stats.avg_batch_size.store(count, Ordering::Relaxed);
-        }
-
-        results
-    }
-
-    fn flush_sync(&mut self) -> Vec<IoResult> {
-        let mut results = Vec::new();
-
-        while let Some(request) = self.pending.pop_front() {
-            let result = match request.op {
-                IoOpType::Read => self.sync_read(request.fd, request.offset, request.buffer.len()),
-                IoOpType::Write => self.sync_write(request.fd, request.offset, &request.buffer),
-                IoOpType::Fsync => self.sync_fsync(request.fd),
-                IoOpType::Fdatasync => self.sync_fsync(request.fd),
-            };
-
-            results.push(IoResult {
+        let results: Vec<IoResult> = self
+            .pending
+            .drain(..)
+            .map(|request| IoResult {
                 user_data: request.user_data,
-                result,
+                result: -ENOSYS,
                 op: request.op,
-            });
+            })
+            .collect();
 
-            self.stats.completions.fetch_add(1, Ordering::Relaxed);
-        }
+        self.stats
+            .completions
+            .fetch_add(results.len() as u64, Ordering::Relaxed);
 
         results
-    }
-
-    fn sync_read(&self, _fd: i32, _offset: u64, len: usize) -> i32 {
-        self.stats
-            .bytes_read
-            .fetch_add(len as u64, Ordering::Relaxed);
-        len as i32
-    }
-
-    fn sync_write(&self, _fd: i32, _offset: u64, data: &[u8]) -> i32 {
-        self.stats
-            .bytes_written
-            .fetch_add(data.len() as u64, Ordering::Relaxed);
-        data.len() as i32
-    }
-
-    fn sync_fsync(&self, _fd: i32) -> i32 {
-        0
     }
 
     pub fn stats(&self) -> &IoUringStats {
@@ -299,16 +254,22 @@ impl IoUring {
     }
 }
 
+/// A file read and written with standard blocking I/O.
 #[allow(dead_code)]
 pub struct UringFile {
     path: PathBuf,
     file: Option<File>,
-    uring: Option<IoUring>,
     direct_io: bool,
 }
 
 impl UringFile {
+    /// Opens or creates the file. Fails when `config.enabled` is set: minikv
+    /// has no io_uring backend.
     pub fn open(path: PathBuf, config: &IoUringConfig) -> Result<Self> {
+        if config.enabled {
+            return Err(NotImplemented::IO_URING.into());
+        }
+
         let file = std::fs::OpenOptions::new()
             .read(true)
             .write(true)
@@ -317,16 +278,9 @@ impl UringFile {
             .open(&path)
             .map_err(|e| Error::Internal(format!("Failed to open file: {}", e)))?;
 
-        let uring = if config.enabled {
-            Some(IoUring::new(config.clone())?)
-        } else {
-            None
-        };
-
         Ok(Self {
             path,
             file: Some(file),
-            uring,
             direct_io: config.direct_io,
         })
     }
@@ -364,24 +318,24 @@ impl UringFile {
         Ok(())
     }
 
-    pub fn async_read(&mut self, offset: u64, len: usize, user_data: u64) {
-        if let Some(ref mut uring) = self.uring {
-            uring.submit_read(0, offset, len, user_data);
-        }
-    }
+    /// Does nothing: there is no asynchronous I/O.
+    #[deprecated(
+        since = "2.0.1",
+        note = "does nothing: minikv has no io_uring backend; use read_at"
+    )]
+    pub fn async_read(&mut self, _offset: u64, _len: usize, _user_data: u64) {}
 
-    pub fn async_write(&mut self, offset: u64, data: Vec<u8>, user_data: u64) {
-        if let Some(ref mut uring) = self.uring {
-            uring.submit_write(0, offset, data, user_data);
-        }
-    }
+    /// Does nothing: there is no asynchronous I/O.
+    #[deprecated(
+        since = "2.0.1",
+        note = "does nothing: minikv has no io_uring backend; use write_at"
+    )]
+    pub fn async_write(&mut self, _offset: u64, _data: Vec<u8>, _user_data: u64) {}
 
+    /// Always empty: there is no asynchronous I/O.
+    #[deprecated(since = "2.0.1", note = "always empty: minikv has no io_uring backend")]
     pub fn flush_async(&mut self) -> Vec<IoResult> {
-        if let Some(ref mut uring) = self.uring {
-            uring.flush()
-        } else {
-            vec![]
-        }
+        Vec::new()
     }
 }
 
@@ -474,6 +428,68 @@ mod tests {
         let config = IoUringConfig::default();
         let uring = IoUring::new(config).unwrap();
         assert_eq!(uring.pending_count(), 0);
+    }
+
+    #[test]
+    fn enabling_io_uring_fails() {
+        let config = IoUringConfig {
+            enabled: true,
+            ..Default::default()
+        };
+        let message = "io_uring is not implemented (roadmap: unscheduled)";
+        assert_eq!(
+            IoUring::new(config.clone()).err().unwrap().to_string(),
+            message
+        );
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("file");
+        let error = UringFile::open(path.clone(), &config).err().unwrap();
+        assert_eq!(error.to_string(), message);
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn flush_answers_enosys_without_doing_any_io() {
+        let mut uring = IoUring::new(IoUringConfig::default()).unwrap();
+        assert!(!uring.is_enabled());
+        uring.submit_read(3, 0, 4096, 1);
+        uring.submit_write(3, 0, vec![1, 2, 3], 2);
+        uring.submit_fsync(3, 3);
+
+        let results = uring.flush();
+        let answers: Vec<(u64, IoOpType, i32)> = results
+            .iter()
+            .map(|r| (r.user_data, r.op, r.result))
+            .collect();
+        assert_eq!(
+            answers,
+            [
+                (1, IoOpType::Read, -38),
+                (2, IoOpType::Write, -38),
+                (3, IoOpType::Fsync, -38),
+            ]
+        );
+        assert_eq!(uring.pending_count(), 0);
+
+        let stats = IoUringStatsSnapshot::from(uring.stats());
+        assert_eq!(stats.submissions, 3);
+        assert_eq!(stats.completions, 3);
+        assert_eq!(stats.bytes_read, 0);
+        assert_eq!(stats.bytes_written, 0);
+        assert_eq!(stats.batched_submissions, 0);
+    }
+
+    #[test]
+    fn uring_file_reads_and_writes_with_blocking_io() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("file");
+        let mut file = UringFile::open(path.clone(), &IoUringConfig::default()).unwrap();
+        file.write_at(4, b"minikv").unwrap();
+        file.sync().unwrap();
+
+        assert_eq!(file.read_at(4, 6).unwrap(), b"minikv");
+        assert_eq!(std::fs::read(&path).unwrap(), b"\0\0\0\0minikv");
     }
 
     #[test]
