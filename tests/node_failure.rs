@@ -1,4 +1,8 @@
-//! Node failure and recovery test for minikv cluster
+//! Log replication between Raft nodes, driven by direct calls.
+//!
+//! Despite its name, no node fails and none recovers here: the test gives the
+//! same `AppendEntries` request to two followers. `tests/distributed_cluster.rs`
+//! stops the leader and volumes of a real cluster.
 
 use minikv::coordinator::raft_node::{RaftNode, RaftRole};
 use std::sync::Arc;

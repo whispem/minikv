@@ -1,5 +1,19 @@
+//! The configuration file format.
+//!
+//! Only `minikv-coord` reads a configuration file, and it only applies part of
+//! the `[coordinator]` section: see [`CoordinatorConfig`]. `minikv-volume`
+//! takes its settings from its command line.
+
 impl Config {
-    /// Loads configuration from a TOML file and overrides with environment variables (prefix MINIKV_)
+    /// Reads `config.toml`, then `config.local.toml` (both optional, in the
+    /// working directory), then the environment variables whose names start
+    /// with `MINIKV_`. Panics when the result is not a valid configuration.
+    ///
+    /// The environment uses `_` both after the prefix and between nested
+    /// keys, so it can only set keys whose names contain no `_`: `MINIKV_ROLE`
+    /// sets `role` and `MINIKV_COORDINATOR_REPLICAS` sets
+    /// `coordinator.replicas`, but `MINIKV_NODE_ID` sets `node.id`, not
+    /// `node_id`.
     pub fn load() -> Self {
         Self::builder()
             .build()
@@ -8,6 +22,7 @@ impl Config {
             .expect("Failed to parse config")
     }
 
+    /// Same as [`Config::load`], but returns the error instead of panicking.
     pub fn try_load() -> std::result::Result<Self, config::ConfigError> {
         Self::builder().build()?.try_deserialize()
     }
@@ -27,6 +42,7 @@ use std::time::Duration;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
+    /// Required by the format. `minikv-coord` uses its `--id` flag instead.
     pub node_id: String,
 
     pub role: NodeRole,
@@ -34,9 +50,11 @@ pub struct Config {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub coordinator: Option<CoordinatorConfig>,
 
+    /// Not read: see [`VolumeConfig`].
     #[serde(skip_serializing_if = "Option::is_none")]
     pub volume: Option<VolumeConfig>,
 
+    /// Not read: the binaries take their log level from `RUST_LOG`.
     #[serde(default = "default_log_level")]
     pub log_level: String,
 }
@@ -52,22 +70,35 @@ pub enum NodeRole {
     Volume,
 }
 
+/// Settings of a coordinator.
+///
+/// [`crate::Coordinator`] applies all of them, but `minikv-coord` only takes
+/// `bind_addr`, `grpc_addr`, `db_path`, `peers` and `replicas` from the
+/// configuration file: it uses the defaults for the other fields, and logs a
+/// warning for each one that the file sets to another value.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CoordinatorConfig {
+    /// HTTP API.
     pub bind_addr: SocketAddr,
 
+    /// gRPC, between the nodes.
     pub grpc_addr: SocketAddr,
 
+    /// Metadata, Raft log, vector index and audit log.
     pub db_path: PathBuf,
 
+    /// gRPC addresses of the other coordinators.
     pub peers: Vec<String>,
 
+    /// Number of volumes that store each value.
     #[serde(default = "default_replicas")]
     pub replicas: usize,
 
+    /// Raft election timeout, in milliseconds.
     #[serde(default = "default_election_timeout")]
     pub election_timeout_ms: u64,
 
+    /// Interval between the heartbeats of the Raft leader, in milliseconds.
     #[serde(default = "default_heartbeat_interval")]
     pub heartbeat_interval_ms: u64,
 
@@ -82,9 +113,12 @@ pub struct CoordinatorConfig {
     #[serde(default = "default_num_shards")]
     pub num_shards: u64,
 
+    /// PEM certificate. With `tls_key_path`, [`crate::Coordinator`] serves
+    /// HTTP and gRPC over TLS. `minikv-coord` cannot enable TLS.
     #[serde(default)]
     pub tls_cert_path: Option<String>,
 
+    /// PEM private key: see `tls_cert_path`.
     #[serde(default)]
     pub tls_key_path: Option<String>,
 }
@@ -123,6 +157,11 @@ impl Default for CoordinatorConfig {
     }
 }
 
+/// Settings of a volume server, in the configuration file format.
+///
+/// Not read: `minikv-volume` takes its settings from its command line, and
+/// nothing else uses this struct. The volume server always syncs its WAL with
+/// [`WalSyncPolicy::Always`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VolumeConfig {
     pub bind_addr: SocketAddr,
@@ -176,11 +215,15 @@ fn default_true() -> bool {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum WalSyncPolicy {
-    /// fsync after every write
+    /// Flushes and fsyncs the WAL after every write.
     #[default]
     Always,
-    /// fsync periodically
+    /// Flushes the WAL to the operating system after every write, without
+    /// fsync: a machine crash can lose the last writes. Despite the name,
+    /// nothing runs periodically.
     Interval,
+    /// Leaves each write in the WAL's memory buffer until the buffer fills or
+    /// the WAL is flushed: a crash of the process can lose the last writes.
     Never,
 }
 

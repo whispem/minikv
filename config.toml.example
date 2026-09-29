@@ -1,15 +1,30 @@
-# TLS (PEM file paths)
-tls_cert_path = "./certs/cert.pem"
-tls_key_path = "./certs/key.pem"
-# Example minikv configuration (config.toml)
+# Example configuration file for minikv-coord.
+#
+# minikv-coord reads config.toml, then config.local.toml, from the directory
+# it starts in, then the MINIKV_* environment variables (only for keys whose
+# names contain no "_", such as MINIKV_ROLE). minikv-volume reads no
+# configuration file: it takes its settings from its command line.
 
-# HTTP listening port
-http_port = 8080
-# gRPC listening port
-grpc_port = 50051
-# Metadata database path
-metadata_path = "./data/metadata.db"
-# Log level (info, debug, warn, error)
-log_level = "info"
-# Cluster ID (optional)
-cluster_id = "minikv-dev"
+# Required by the format. minikv-coord uses its --id flag, not this value.
+node_id = "coord-1"
+role = "coordinator"
+
+[coordinator]
+# minikv-coord applies these five settings. A value from this file replaces
+# the matching flag, except the values 0.0.0.0:5000 (bind_addr), 0.0.0.0:5001
+# (grpc_addr), ./coord-data (db_path), [] (peers) and 3 (replicas), which
+# leave the flag in effect.
+bind_addr = "0.0.0.0:8000"   # HTTP API (--bind)
+grpc_addr = "0.0.0.0:8001"   # gRPC between the nodes (--grpc)
+db_path = "./coord-data"     # metadata, Raft log, vector index and audit log (--db)
+peers = []                   # gRPC addresses of the other coordinators (--peers)
+replicas = 3                 # volumes that store each value (--replicas)
+
+# minikv-coord does not apply the settings below, and logs a warning for each
+# one that differs from the default shown here.
+# election_timeout_ms = 300
+# heartbeat_interval_ms = 50
+# snapshot_threshold = 10000            # reserved: there are no Raft snapshots
+# num_shards = 256                      # reserved: placement uses no shards
+# tls_cert_path = "./certs/cert.pem"    # minikv-coord cannot enable TLS
+# tls_key_path = "./certs/key.pem"

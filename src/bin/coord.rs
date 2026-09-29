@@ -1,4 +1,10 @@
-//! Coordinator binary
+//! The `minikv-coord` binary.
+//!
+//! `serve` takes `bind_addr`, `grpc_addr`, `db_path`, `peers` and `replicas`
+//! from its flags and from the `[coordinator]` section of the configuration
+//! file (see [`minikv::common::Config::load`]). It does not apply the other
+//! settings of that section, and logs a warning for each one that differs
+//! from its default.
 
 use clap::{Parser, Subcommand};
 use minikv::{common::CoordinatorConfig, Coordinator};
@@ -75,6 +81,9 @@ async fn main() -> anyhow::Result<()> {
                 ..Default::default()
             };
             if let Some(file_conf) = file_config {
+                warn_about_ignored_settings(&file_conf);
+                // A value from the file replaces the flag, unless it equals
+                // the value it is compared with below: then the flag stays.
                 let bind_addr = file_conf.bind_addr;
                 let grpc_addr = file_conf.grpc_addr;
                 let db_path = file_conf.db_path.clone();
@@ -102,4 +111,41 @@ async fn main() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+/// Logs a warning for each setting of the file's `[coordinator]` section that
+/// `serve` does not apply, when it differs from the value in use.
+fn warn_about_ignored_settings(file: &CoordinatorConfig) {
+    let default = CoordinatorConfig::default();
+    let mut ignored = Vec::new();
+    if file.election_timeout_ms != default.election_timeout_ms {
+        ignored.push(format!(
+            "election_timeout_ms = {} (the coordinator uses {})",
+            file.election_timeout_ms, default.election_timeout_ms
+        ));
+    }
+    if file.heartbeat_interval_ms != default.heartbeat_interval_ms {
+        ignored.push(format!(
+            "heartbeat_interval_ms = {} (the coordinator uses {})",
+            file.heartbeat_interval_ms, default.heartbeat_interval_ms
+        ));
+    }
+    if file.snapshot_threshold != default.snapshot_threshold {
+        ignored.push(format!(
+            "snapshot_threshold = {} (reserved: there are no Raft snapshots)",
+            file.snapshot_threshold
+        ));
+    }
+    if file.num_shards != default.num_shards {
+        ignored.push(format!(
+            "num_shards = {} (reserved: placement uses no shards)",
+            file.num_shards
+        ));
+    }
+    if file.tls_cert_path.is_some() || file.tls_key_path.is_some() {
+        ignored.push("tls_cert_path and tls_key_path (TLS stays off)".to_string());
+    }
+    for setting in ignored {
+        tracing::warn!("[coordinator] {} is not applied by minikv-coord", setting);
+    }
 }

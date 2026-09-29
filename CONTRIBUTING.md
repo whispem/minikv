@@ -40,12 +40,6 @@ The time-series integration tests expect a coordinator listening on port 8000, a
 cargo run --release --bin minikv-coord -- serve --id 1
 ```
 
-The `admin_status` test rewrites `config.toml`. Restore it before committing:
-
-```bash
-git restore config.toml
-```
-
 ## Branch and Commit Workflow
 
 1. Create a branch.

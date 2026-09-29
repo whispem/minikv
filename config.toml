@@ -1,7 +1,5 @@
+# Read by minikv-coord when it starts from this directory, as in CI and in
+# `make test`. Without a [coordinator] section, the coordinator takes all its
+# settings from its flags. See config.toml.example for the format.
 node_id = 'coord-s3'
 role = 'coordinator'
-replicas = 1
-
-# Custom ports for coordinator
-bind_addr = "0.0.0.0:8000"
-grpc_addr = "0.0.0.0:8001"

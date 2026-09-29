@@ -1,4 +1,9 @@
-//! Raft integration test: election, replication, failover
+//! Raft log replication and a change of leader, driven by direct calls.
+//!
+//! Nothing is elected: the test sets the leaders itself with `become_leader`
+//! and `step_down`, and gives the `AppendEntries` request to the followers.
+//! `tests/distributed_cluster.rs` runs real coordinators, which elect a leader
+//! and replace it when it stops.
 
 use minikv::common::raft::LogEntry;
 use minikv::coordinator::raft_node::{RaftNode, RaftRole};
