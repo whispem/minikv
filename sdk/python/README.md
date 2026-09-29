@@ -48,6 +48,4 @@ for event in client.watch_sse():
 - /batch
 - /watch/sse
 - /metrics
-- /admin/backup
-- /admin/backups
-- /admin/restore
+- /admin/backup, /admin/backups and /admin/restore: they answer 501 in minikv 2.0.1, where backups and restores are not implemented

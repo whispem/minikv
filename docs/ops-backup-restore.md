@@ -1,5 +1,7 @@
 # Backup and Restore Runbook
 
+> **Not implemented in minikv 2.0.1.** Every backup and restore route answers `501 Not Implemented`, for example `{"error":"not implemented","feature":"backup","roadmap":"unscheduled"}`, and no release plans them yet. None of the steps below can run today: they describe the drill for when these routes exist.
+
 ## Goal
 
 Verify that backups are usable and recovery is repeatable.

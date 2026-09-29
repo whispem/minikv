@@ -13,6 +13,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.0.1] - 2026-09-29
+
+A correction release: where 2.0.0 reported work that it did not do, minikv now fails explicitly, and the data losses found on the way are fixed.
+
+### Correction
+
+Some earlier entries describe features that the code never provided. They stay as they were written. In short:
+
+- There are no virtual shards and no rebalancing: placement ranks the live volumes by rendezvous hashing (HRW) on each key.
+- `verify`, `repair`, `compact`, `rebalance`, `upgrade` and `stream`, and the matching admin routes, never ran: they returned fixed reports.
+- Backups copied nothing, restores restored nothing, and TTLs were never applied.
+- The Kubernetes operator, io_uring, the Kafka CDC sink, tiering compression, time-series downsampling and OpenTelemetry tracing do not exist, and nothing encrypts data at rest.
+
+### Changed
+
+- **BREAKING (HTTP):** `POST /admin/verify`, `/admin/repair`, `/admin/compact` and `/admin/scale` answer `501 Not Implemented`, with `{"error":"not implemented","feature":…,"roadmap":…}`, instead of `200` and an invented report. So do the backup and restore routes, which answered `503` or an empty list. A write with an `X-Minikv-TTL` header answers `501` and stores nothing.
+- **BREAKING (CLI):** `verify`, `repair`, `compact`, `rebalance`, `upgrade` and `stream` exit with status 1 and name the release planned for them. `get`, `put` and `delete` exit with status 1 when the coordinator answers an error.
+- **BREAKING (metrics):** `/metrics` no longer exports the series that nothing updated (`minikv_requests_total`, `minikv_errors_total`, `minikv_bytes_read_total`, `minikv_bytes_written_total`, `minikv_active_connections`, `minikv_keys_with_ttl`, `minikv_rate_limited_requests`, `minikv_request_duration_ms` and the per-endpoint series), nor `minikv_volume_free_bytes` and `minikv_s3_objects_with_ttl`, which were always 0. `minikv_raft_role` becomes one gauge per role: `minikv_raft_role{role="leader"} 1`.
+- **BREAKING (library):** functions that reported work they did not do now return errors: `MiniKVController::run`, `reconcile` and `handle_delete`; `IoUring::new` and `UringFile::open` when `enabled` is set; `BackupManager::start_restore`; `TimeseriesEngine::run_downsampling`; the tiering `compress` and `decompress` for any algorithm but `None`; `CDCManager::create_sinks_from_config` with a Kafka sink; `CDCManager::flush` when a sink fails; `BlobStore::compact`.
+- The vector index and `audit.log` are stored under `--db`; a vector index left by 2.0.0 in `coord-data/` is loaded. Audit entries name the actor `unauthenticated`.
+- `minikv get` writes the raw bytes, to standard output when `--output` is absent. `--coordinator` is accepted before or after the subcommand.
+- The remote datacenters of `ReplicationManager` start unhealthy, never contacted.
+- Removed `scripts/admin.sh`, `scripts/test_raft_cluster.sh`, `fix_ci_complete.sh` and `cobertura.xml`, and the unused dependencies `raft`, `raft-proto`, `opentelemetry` and `tracing-opentelemetry`.
+
+### Fixed
+
+- A restarted volume server rebuilds its index from its segments and its WAL: deleted blobs and old versions no longer come back, and the index holds the BLAKE3 hash of the values. LZ4-compressed values can be read back.
+- Time series: a second write in the same hour no longer replaces the first, a query that starts inside an hour finds its points, and a range that ends before it starts no longer panics.
+- `/metrics` follows the Prometheus text format, with `HELP` and `TYPE` lines.
+- `/admin/export` and `/search` report the values that they cannot read. `/search` matches bytes, and answers `500` when the key listing fails.
+- `/admin/status` reports `nb_s3_objects` as `null`, instead of 0, when the key listing fails. The time-series stats list only what the engine supports, and the geo and CDC status answers drop their invented fields.
+- The admin dashboard reads the fields that `/admin/status` returns, and shows the real version.
+- `minikv-coord` logs a warning for each `[coordinator]` setting of the configuration file that it does not apply, and `config.toml.example` loads.
+- The tests no longer rewrite `config.toml`.
+- HRW placement breaks ties by volume id.
+- The benchmarks count only `200` as a success, and `scripts/benchmark.sh` sends its requests to the leader of a cluster that can elect one. The coordinator image checks `/health/live`, and the alert rules on metrics that do not exist are gone.
+- Documentation: placement, what is implemented and what answers `501`, configuration, and the module docs.
+
+### Deprecated
+
+These items stay for compatibility and will be removed in 3.0.0:
+
+- `ConsistentHashRing`, `blob_prefix`, `Error::ShardNotFound`, and `PlacementManager::get_shard`, `rebalance` and `get_shard_volumes`: not wired into placement.
+- `StoreStats::bloom_false_positives` and `compressed_blobs`: always 0.
+- `volume::http::Location` and `get_location`, and `VolumeGrpcService::new`.
+- `maybe_encrypt` and `maybe_decrypt`: they return their input when encryption or decryption fails.
+- `UringFile::async_read`, `async_write` and `flush_async`: they do nothing.
+- The `shard` field of `BlobLocation` holds a segment number: read it with `BlobLocation::segment()`.
+
+---
+
 ## [2.0.0] - 2026-09-20
 
 ### Changed

@@ -1,4 +1,4 @@
-# Professional Test Report Template - minikv v2.0.0
+# Professional Test Report Template - minikv v2.0.1
 
 Use this template to record results for each manual scenario execution.
 Complete all sections to ensure traceability and reproducibility.
@@ -58,13 +58,6 @@ Complete all sections to ensure traceability and reproducibility.
 
 ## Feature-Specific Checklist
 
-### Kubernetes Operator and Cloud-Native
-
-- [ ] CRD applied and recognized
-- [ ] Operator reconciliation successful
-- [ ] StatefulSet, Services, ConfigMaps, RBAC validated
-- [ ] Scaling behavior verified
-
 ### Time-Series
 
 - [ ] `POST /ts/write` validated
@@ -78,22 +71,6 @@ Complete all sections to ensure traceability and reproducibility.
 - [ ] `GET /admin/vector/stats` validated
 - [ ] Persistence across restart verified
 
-### Geo-Partitioning
-
-- [ ] Routing strategies validated
-- [ ] Failover validated
-- [ ] Geo-fencing validated (if configured)
-
-### Data Tiering
-
-- [ ] Tier transitions validated
-- [ ] Readability after movement validated
-
-### io_uring (Linux)
-
-- [ ] io_uring path active when enabled
-- [ ] Fallback path validated
-
 ### Reliability and Consistency
 
 - [ ] Node failure recovery validated
@@ -102,15 +79,19 @@ Complete all sections to ensure traceability and reproducibility.
 
 ### Operations and Security
 
-- [ ] Compaction and repair safety validated
+- [ ] Admin operations that are not implemented answer `501`
 - [ ] Audit logging validated
-- [ ] Persistent backend restart durability validated
+- [ ] Volume restart: deleted keys stay deleted
 
 ### Watch and Subscribe
 
 - [ ] `/watch/ws` validated
 - [ ] `/watch/sse` validated
 - [ ] Event payload and ordering validated
+
+### Not Implemented in 2.0.1
+
+Nothing to validate: the Kubernetes operator, geo routing, data tiering, io_uring, and the verify, repair, compact, scale, backup and restore operations.
 
 ## Attachments
 

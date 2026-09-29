@@ -112,8 +112,8 @@ I had no formal tech background, but I wanted to understand how systems worked a
 - Automatic failover: the remaining coordinators elect a new leader within about a second
 - Volume servers that register themselves through heartbeats
 - Range queries and batch operations
-- TLS encryption for HTTP and gRPC
-- Flexible configuration: file, env, CLI override
+- TLS for HTTP and gRPC in the coordinator library (`minikv-coord` cannot enable it yet)
+- Configuration from command-line flags, with part of the `[coordinator]` section of `config.toml`
 - Admin status endpoint (`/admin/status`): role, term, leader, commit index, volumes
 - S3-compatible API (PUT/GET/DELETE)
 - Watch/subscribe system (WebSocket and SSE) for real-time key change notifications
@@ -128,9 +128,8 @@ I had no formal tech background, but I wanted to understand how systems worked a
 - Segmented, append-only log structure
 - In-memory HashMap indexing for O(1) key lookups
 - Bloom filters for fast negative queries
-- Index snapshots
+- An index rebuilt from the segments and the WAL at startup
 - CRC32 checksums on every record
-- Compaction with space reclamation
 - RocksDB for coordinator metadata
 
 **Security & Multi-Tenancy building blocks** (implemented and tested as modules; enforcement on the HTTP API is on the roadmap):
@@ -142,9 +141,8 @@ I had no formal tech background, but I wanted to understand how systems worked a
 - Audit logging for admin operations
 
 **Durability:**
-- Write-Ahead Log (WAL) for safety
-- Configurable fsync policy (always, interval, never)
-- Fast crash recovery via WAL replay
+- Write-Ahead Log (WAL), synced with fsync after every write
+- Crash recovery from the segments and the WAL
 - Raft log and term persisted with CRC32 checksums and fsync
 
 **APIs:**
@@ -155,13 +153,11 @@ I had no formal tech background, but I wanted to understand how systems worked a
 
 **Infrastructure and Operations:**
 - Docker Compose setup for dev/test
-- Helm chart with dev/staging/prod profiles
+- A Helm chart with dev/staging/prod profiles, which does not start a working cluster yet
 - GitHub Actions for CI/CD
 - k6 benchmarks for real scenarios
-- Distributed tracing via OpenTelemetry & Jaeger
-- Prometheus metrics endpoint (`/metrics`) and alert rules
+- Prometheus metrics endpoint (`/metrics`) and an alert rule
 - Grafana dashboards for cluster visibility
-- Backup and restore runbook for operations
 
 **Testing and Quality:**
 - End-to-end cluster test: 3 coordinators and 3 volumes, leader failover and restart

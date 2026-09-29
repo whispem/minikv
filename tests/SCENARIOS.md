@@ -1,6 +1,6 @@
-# Test Scenarios - minikv v2.0.0
+# Test Scenarios - minikv v2.0.1
 
-This document defines manual validation scenarios for minikv v2.0.0. Each scenario gives its context, its steps, its success criteria, and the automated test that covers it when there is one.
+This document defines manual validation scenarios for minikv v2.0.1. Each scenario gives its context, its steps, its success criteria, and the automated test that covers it when there is one.
 
 Unless a scenario says otherwise, start a local cluster with:
 
@@ -133,7 +133,7 @@ Success criteria:
 - The status endpoint reflects the live volumes.
 - A restarted volume registers itself again through its heartbeat.
 
-Known limitation: minikv does not re-replicate a lost blob. Re-replication is on the v2.1.0 roadmap.
+Known limitation: minikv does not re-replicate a lost blob. Re-replication (`repair`) is on the v2.2.0 roadmap: `POST /admin/repair` answers `501`.
 
 ## 8. Raft State Machine
 
@@ -153,7 +153,7 @@ Success criteria:
 
 ## 9. Durability After a Crash
 
-Automated: `tests/recovery.rs` and `tests/integration.rs`, at the storage-engine level.
+Automated: `tests/recovery.rs`, `tests/integration.rs` and `tests/volume_restart.rs`, at the storage-engine level. `tests/volume_restart.rs` also restarts a volume in a real cluster.
 
 Context: a volume recovers its data after an abrupt stop.
 
@@ -166,8 +166,7 @@ Success criteria:
 - The WAL is replayed and the keys are readable.
 - CRC32 checks pass on every record.
 - A partially written record at the end of the log is dropped rather than read.
-
-Known limitation: a key deleted before a restart comes back in the volume's index. Versioned blobs keep this invisible to clients, but it wastes space.
+- A key deleted before the restart stays deleted, and only the last version of a key is indexed.
 
 ## 10. S3-Compatible API
 
@@ -188,19 +187,21 @@ Success criteria:
 
 ## 11. Time-Series Engine
 
-Automated: `tests/timeseries_integration.rs`, against a coordinator on port 8000.
+Automated: `tests/timeseries_integration.rs` (two of its tests expect a coordinator on port 8000) and the unit tests of `src/common/timeseries.rs`.
 
 Context: ingest and query workflows.
 
 Steps:
-1. Write samples with `POST /ts/write`.
-2. Query with `POST /ts/query`, with filters and a time window.
-3. Check aggregation and downsampling behavior.
+1. Write samples with `POST /ts/write`, twice in the same hour.
+2. Query with `POST /ts/query`, with filters and a time window that starts inside an hour.
+3. Check aggregation behavior.
 4. Read `GET /admin/timeseries/stats`.
 
 Success criteria:
-- Samples are persisted and queryable.
+- Every sample written is queryable.
 - Filters and aggregations return the expected values.
+
+Known limitations: the samples live in the memory of the coordinator that received them. They are not replicated, and a restart loses them. There is no downsampling.
 
 ## 12. Vector Similarity Search
 
@@ -246,9 +247,9 @@ Steps:
 
 Success criteria:
 - No crash loop, no unbounded memory growth.
-- Latency and error counters stay stable in `/metrics`.
+- k6 reports latencies and success rates: `/metrics` has no latency or error counter.
 
-Known limitation: the k6 scenarios under `bench/` were written for the v1 API. They do not look for the leader and they count a `501` as a success, so they need an update before their numbers mean anything.
+`scripts/benchmark.sh` starts its own cluster and sends its requests to the leader. The scenarios under `bench/` target one coordinator (`make bench-all` starts a cluster of one coordinator and one volume). All of them count only `200` as a success.
 
 ## 15. Kubernetes Deployment
 
@@ -266,7 +267,7 @@ Success criteria:
 - Pods reach a ready state and coordinators elect a leader.
 - Volumes register themselves with every coordinator.
 
-Known limitation: no operator process is shipped. `MiniKVClusterSpec` and `MiniKVController` in `src/common/k8s_operator.rs` are a modeled reconciliation loop with unit tests, not a running controller, so nothing reconciles the CRD on its own.
+Known limitations, which make this scenario fail in 2.0.1: the Helm chart passes none of the settings that the images need, so the containers exit at startup. No operator exists: `MiniKVController` in `src/common/k8s_operator.rs` fails with "not implemented", so nothing reconciles the CRD.
 
 ## Modules Not Yet Enforced on the HTTP API
 
@@ -274,15 +275,21 @@ These are implemented and covered by their own unit tests, but the HTTP API does
 
 - Authentication (API keys with Argon2, JWT) and RBAC
 - Tenant quotas and request rate limiting
-- AES-256-GCM encryption
-- Audit logging
-- Geo-partitioning: `GET /admin/geo/status` answers `enabled: false`
-- Data tiering and io_uring
-- `POST /admin/compact`, `POST /admin/repair` and `POST /admin/verify`, which call the placeholder tooling in `src/ops/`
+- AES-256-GCM encryption: nothing encrypts data at rest
+
+The audit log does record the admin operations, with the actor `unauthenticated`.
+
+## Not Implemented
+
+Nothing to validate yet:
+
+- `POST /admin/verify` (planned for 2.1.0), `/admin/repair`, `/admin/compact` and `/admin/scale` (2.2.0), the backup and restore routes, and writes with `X-Minikv-TTL`: they answer `501`
+- Geo routing: `GET /admin/geo/status` answers `enabled: false`
+- Data tiering: bookkeeping only, no data moves
+- io_uring, the Kubernetes operator, the Kafka CDC sink and time-series downsampling: they fail with "not implemented"
 
 ## Execution Notes
 
 - Record the commands, the timestamps and the environment.
 - Capture logs (`./data/*.log` when the cluster comes from `make serve`) and `/metrics` output for any failure.
 - Store outcomes in `tests/RESULT_TEMPLATE.md`.
-- The `admin_status` test rewrites `config.toml`. Run `git restore config.toml` afterwards.
