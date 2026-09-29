@@ -24,9 +24,6 @@ tower = { version = "0.5", features = ["util", "timeout"] }
 tower-http = { version = "0.5", features = ["limit", "trace"] }
 # Metadata store
 rocksdb = "0.22"
-# Raft consensus
-raft = "0.7"
-raft-proto = "0.7"
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -65,9 +62,6 @@ rustls = "0.23.35"
 rustls-pemfile = "2.2.0"
 # Compression (v0.5.0)
 lz4 = "1.28"
-# Distributed tracing (v0.5.0)
-tracing-opentelemetry = "0.27"
-opentelemetry = "0.27"
 # Authentication & Security (v0.6.0)
 jsonwebtoken = "9"
 argon2 = "0.5"

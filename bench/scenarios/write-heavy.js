@@ -39,44 +39,45 @@ let writtenKeys = [];
 
 export default function () {
     const shouldWrite = Math.random() < WRITE_RATIO;
-    
+
     if (shouldWrite) {
         const key = `write-heavy-${__VU}-${__ITER}`;
         const data = generateData(OBJECT_SIZE);
-        
+
         const start = Date.now();
         const res = http.put(`${BASE_URL}/${key}`, data, {
             headers: { 'Content-Type': 'application/octet-stream' },
         });
         const duration = Date.now() - start;
-        
-        writeSuccess.add(res.status === 201 || res.status === 501);
+
+        // A write succeeds with 200; any other status is a failure.
+        writeSuccess.add(res.status === 200);
         writeLatency.add(duration);
-        bytesWritten.add(OBJECT_SIZE);
-        
+
         check(res, {
-            'write ok': (r) => r.status === 201 || r.status === 501,
+            'write ok': (r) => r.status === 200,
         });
-        
-        if (res.status === 201) {
+
+        if (res.status === 200) {
+            bytesWritten.add(OBJECT_SIZE);
             writtenKeys.push(key);
         }
     } else {
         if (writtenKeys.length > 0) {
             const key = writtenKeys[Math.floor(Math.random() * writtenKeys.length)];
-            
+
             const start = Date.now();
             const res = http.get(`${BASE_URL}/${key}`);
             const duration = Date.now() - start;
-            
+
             readSuccess.add(res.status === 200);
             readLatency.add(duration);
-            
+
             check(res, {
                 'read ok': (r) => r.status === 200,
             });
         }
     }
-    
+
     sleep(0.1);
 }

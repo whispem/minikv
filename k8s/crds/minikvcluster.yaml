@@ -1,3 +1,5 @@
+# The CRD installs, but nothing reconciles MiniKVCluster resources: minikv has
+# no Kubernetes operator (see k8s/operator/deployment.yaml).
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:

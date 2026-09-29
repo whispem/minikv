@@ -1,3 +1,6 @@
+# NOT FUNCTIONAL: applying this creates a MiniKVCluster resource that nothing
+# reconciles, since minikv has no Kubernetes operator (see
+# k8s/operator/deployment.yaml).
 # Production MiniKV cluster
 apiVersion: minikv.io/v1alpha1
 kind: MiniKVCluster

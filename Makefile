@@ -57,7 +57,6 @@ test:
 	cargo test --all --release; \
 	STATUS=$$?; \
 	{ kill $$COORD && wait $$COORD; } 2>/dev/null; \
-	git restore config.toml 2>/dev/null || true; \
 	exit $$STATUS
 
 ci: fmt-check clippy build test

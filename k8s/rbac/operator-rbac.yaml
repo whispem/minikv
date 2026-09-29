@@ -1,3 +1,5 @@
+# NOT FUNCTIONAL: these permissions are for a Kubernetes operator that minikv
+# does not have (see k8s/operator/deployment.yaml).
 apiVersion: v1
 kind: ServiceAccount
 metadata:

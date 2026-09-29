@@ -1,3 +1,7 @@
+# NOT FUNCTIONAL: minikv has no Kubernetes operator. This repository builds
+# no operator binary and no operator image, so the image named below does not
+# come from it, and nothing reconciles MiniKVCluster resources: the controller
+# in src/common/k8s_operator.rs fails with "not implemented".
 apiVersion: v1
 kind: Namespace
 metadata:

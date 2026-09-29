@@ -1,6 +1,8 @@
 groups:
   - name: minikv-slo
     interval: 30s
+    # minikv 2.0.1 exports no latency histogram and no error counter (see the
+    # families of GET /metrics), so there is no latency or error-rate alert.
     rules:
       - alert: MinikvNoHealthyVolumes
         expr: minikv_healthy_volumes < 1
@@ -10,30 +12,3 @@ groups:
         annotations:
           summary: "minikv has no healthy volumes"
           description: "No healthy volumes detected for at least 2 minutes."
-
-      - alert: MinikvHighWriteLatencyP95
-        expr: histogram_quantile(0.95, sum(rate(minikv_write_latency_seconds_bucket[5m])) by (le)) > 0.05
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "minikv write p95 latency high"
-          description: "Write latency p95 is above 50ms for at least 5 minutes."
-
-      - alert: MinikvHighReadLatencyP95
-        expr: histogram_quantile(0.95, sum(rate(minikv_read_latency_seconds_bucket[5m])) by (le)) > 0.02
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "minikv read p95 latency high"
-          description: "Read latency p95 is above 20ms for at least 5 minutes."
-
-      - alert: MinikvWriteErrorRateHigh
-        expr: rate(minikv_write_errors_total[5m]) > 1
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "minikv write errors detected"
-          description: "Write errors are above 1 error/second over a 5 minute window."

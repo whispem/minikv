@@ -26,19 +26,19 @@ print_banner() {
 
 check_deps() {
     local missing=()
-    
+
     if ! command -v cargo &> /dev/null; then
         missing+=("cargo")
     fi
-    
+
     if ! command -v k6 &> /dev/null; then
         missing+=("k6 (brew install k6)")
     fi
-    
+
     if ! command -v jq &> /dev/null; then
         missing+=("jq (brew install jq)")
     fi
-    
+
     if [ ${#missing[@]} -gt 0 ]; then
         echo -e "${RED}Missing dependencies:${NC}"
         for dep in "${missing[@]}"; do
@@ -79,20 +79,20 @@ echo -e "${YELLOW}Starting ${NUM_COORDS} coordinators...${NC}"
 for i in $(seq 1 ${NUM_COORDS}); do
     COORD_HTTP=$((5000 + (i-1)*2))
     COORD_GRPC=$((5001 + (i-1)*2))
-    
+
     # Build peers list (exclude self)
     PEERS=""
     for j in $(seq 1 ${NUM_COORDS}); do
         if [ $j -ne $i ]; then
             PEER_GRPC=$((5001 + (j-1)*2))
             if [ -z "$PEERS" ]; then
-                PEERS="coord-$j:$PEER_GRPC"
+                PEERS="127.0.0.1:$PEER_GRPC"
             else
-                PEERS="$PEERS,coord-$j:$PEER_GRPC"
+                PEERS="$PEERS,127.0.0.1:$PEER_GRPC"
             fi
         fi
     done
-    
+
     ./target/release/minikv-coord serve \
         --id "coord-$i" \
         --bind "127.0.0.1:${COORD_HTTP}" \
@@ -101,12 +101,15 @@ for i in $(seq 1 ${NUM_COORDS}); do
         --peers "$PEERS" \
         --replicas ${REPLICAS} \
         > "${BENCH_DIR}/coord${i}.log" 2>&1 &
-    
+
     echo "  Coordinator $i: HTTP=${COORD_HTTP}, gRPC=${COORD_GRPC}"
 done
 
-sleep 2
-echo -e "${GREEN}[OK] Coordinators started${NC}"
+# Every volume sends its heartbeats to every coordinator.
+COORDINATORS=""
+for i in $(seq 1 ${NUM_COORDS}); do
+    COORDINATORS="${COORDINATORS:+$COORDINATORS,}http://127.0.0.1:$((5000 + (i-1)*2))"
+done
 echo ""
 
 # Start volumes
@@ -114,40 +117,47 @@ echo -e "${YELLOW}Starting ${NUM_VOLUMES} volumes...${NC}"
 for i in $(seq 1 ${NUM_VOLUMES}); do
     VOL_HTTP=$((6000 + (i-1)*2))
     VOL_GRPC=$((6001 + (i-1)*2))
-    
+
     ./target/release/minikv-volume serve \
         --id "vol-$i" \
         --bind "127.0.0.1:${VOL_HTTP}" \
         --grpc "127.0.0.1:${VOL_GRPC}" \
         --data "${BENCH_DIR}/vol${i}-data" \
         --wal "${BENCH_DIR}/vol${i}-wal" \
-        --coordinators "http://127.0.0.1:5000" \
+        --coordinators "${COORDINATORS}" \
         > "${BENCH_DIR}/vol${i}.log" 2>&1 &
-    
+
     echo "  Volume $i: HTTP=${VOL_HTTP}, gRPC=${VOL_GRPC}"
 done
 
-sleep 2
-echo -e "${GREEN}[OK] Volumes started${NC}"
 echo ""
 
-# Wait for cluster to be ready
-echo -n "Waiting for cluster to be ready"
-for i in {1..30}; do
-    if curl -s "http://127.0.0.1:5000/health/live" > /dev/null 2>&1; then
+# Wait until a coordinator is the Raft leader and sees live volumes: writes
+# must go to the leader.
+echo -n "Waiting for a leader with live volumes"
+BASE_URL=""
+for attempt in {1..60}; do
+    for i in $(seq 1 ${NUM_COORDS}); do
+        URL="http://127.0.0.1:$((5000 + (i-1)*2))"
+        if curl -sf "${URL}/health/ready" 2>/dev/null | jq -e '.is_leader == true' > /dev/null 2>&1; then
+            BASE_URL="${URL}"
+            break
+        fi
+    done
+    if [ -n "${BASE_URL}" ]; then
         echo ""
-        echo -e "${GREEN}[OK] Cluster ready${NC}"
+        echo -e "${GREEN}[OK] Cluster ready, leader at ${BASE_URL}${NC}"
         break
     fi
     echo -n "."
     sleep 1
-    if [ $i -eq 30 ]; then
-        echo ""
-        echo -e "${RED}[FAIL] Cluster failed to start${NC}"
-        cat "${BENCH_DIR}/coord1.log"
-        exit 1
-    fi
 done
+if [ -z "${BASE_URL}" ]; then
+    echo ""
+    echo -e "${RED}[FAIL] No leader with live volumes after 60 s${NC}"
+    cat "${BENCH_DIR}/coord1.log"
+    exit 1
+fi
 echo ""
 
 # Create k6 test script
@@ -185,34 +195,35 @@ function generateData(size) {
 export default function () {
     const key = `bench-key-${__VU}-${__ITER}`;
     const data = generateData(OBJECT_SIZE);
-    
+
     // PUT
     const putStart = Date.now();
     const putRes = http.put(`${BASE_URL}/${key}`, data);
     const putDuration = Date.now() - putStart;
-    
-    putRate.add(putRes.status === 201 || putRes.status === 501); // 501 is accepted by this benchmark profile
+
+    // A write succeeds with 200; any other status is a failure.
+    putRate.add(putRes.status === 200);
     putLatency.add(putDuration);
-    
+
     check(putRes, {
-        'PUT status ok': (r) => r.status === 201 || r.status === 501,
+        'PUT status is 200': (r) => r.status === 200,
     });
-    
+
     // GET (skip if PUT failed)
-    if (putRes.status === 201) {
+    if (putRes.status === 200) {
         const getStart = Date.now();
         const getRes = http.get(`${BASE_URL}/${key}`);
         const getDuration = Date.now() - getStart;
-        
+
         getRate.add(getRes.status === 200);
         getLatency.add(getDuration);
-        
+
         check(getRes, {
             'GET status is 200': (r) => r.status === 200,
             'GET body correct': (r) => r.body.length === OBJECT_SIZE,
         });
     }
-    
+
     sleep(0.1);
 }
 EOFK6
@@ -221,14 +232,19 @@ EOFK6
 echo -e "${YELLOW}Running k6 benchmark...${NC}"
 echo ""
 
+# k6 exits with a non-zero status when a threshold fails: keep it to report
+# the outcome after the results.
+set +e
 k6 run \
     --out json="${BENCH_DIR}/results.json" \
     --summary-export="${BENCH_DIR}/summary.json" \
-    --env BASE_URL="http://127.0.0.1:5000" \
+    --env BASE_URL="${BASE_URL}" \
     --env VUS="${VUS}" \
     --env DURATION="${DURATION}" \
     --env OBJECT_SIZE="${OBJECT_SIZE}" \
     "${BENCH_DIR}/test.js" 2>&1 | grep -v "WARN"
+K6_STATUS=${PIPESTATUS[0]}
+set -e
 
 # Parse results
 echo ""
@@ -238,14 +254,16 @@ echo -e "${GREEN}========================================${NC}"
 echo ""
 
 if [ -f "${BENCH_DIR}/summary.json" ]; then
-    PUT_P50=$(jq -r '.metrics.put_latency.values.p50' "${BENCH_DIR}/summary.json" 2>/dev/null || echo "N/A")
-    PUT_P90=$(jq -r '.metrics.put_latency.values.p90' "${BENCH_DIR}/summary.json" 2>/dev/null || echo "N/A")
-    PUT_P95=$(jq -r '.metrics.put_latency.values.p95' "${BENCH_DIR}/summary.json" 2>/dev/null || echo "N/A")
-    
-    GET_P50=$(jq -r '.metrics.get_latency.values.p50' "${BENCH_DIR}/summary.json" 2>/dev/null || echo "N/A")
-    GET_P90=$(jq -r '.metrics.get_latency.values.p90' "${BENCH_DIR}/summary.json" 2>/dev/null || echo "N/A")
-    GET_P95=$(jq -r '.metrics.get_latency.values.p95' "${BENCH_DIR}/summary.json" 2>/dev/null || echo "N/A")
-    
+    # --summary-export writes the median as "med", the percentiles as "p(90)"
+    # and "p(95)".
+    PUT_P50=$(jq -r '.metrics.put_latency.med // "N/A"' "${BENCH_DIR}/summary.json" 2>/dev/null || echo "N/A")
+    PUT_P90=$(jq -r '.metrics.put_latency["p(90)"] // "N/A"' "${BENCH_DIR}/summary.json" 2>/dev/null || echo "N/A")
+    PUT_P95=$(jq -r '.metrics.put_latency["p(95)"] // "N/A"' "${BENCH_DIR}/summary.json" 2>/dev/null || echo "N/A")
+
+    GET_P50=$(jq -r '.metrics.get_latency.med // "N/A"' "${BENCH_DIR}/summary.json" 2>/dev/null || echo "N/A")
+    GET_P90=$(jq -r '.metrics.get_latency["p(90)"] // "N/A"' "${BENCH_DIR}/summary.json" 2>/dev/null || echo "N/A")
+    GET_P95=$(jq -r '.metrics.get_latency["p(95)"] // "N/A"' "${BENCH_DIR}/summary.json" 2>/dev/null || echo "N/A")
+
     echo "Host: $(uname -m) | $(sysctl -n hw.memsize 2>/dev/null | awk '{print $1/1024/1024/1024 " GB"}' || echo 'N/A') | $(uname -s)"
     echo "Cluster: ${NUM_COORDS} coord + ${NUM_VOLUMES} volumes (replicas=${REPLICAS})"
     echo "Config: size=$((OBJECT_SIZE / 1024 / 1024)) MiB, VUs=${VUS}, Duration=${DURATION}"
@@ -259,9 +277,15 @@ if [ -f "${BENCH_DIR}/summary.json" ]; then
     echo "  p50: ${GET_P50} ms"
     echo "  p90: ${GET_P90} ms"
     echo "  p95: ${GET_P95} ms"
+    echo ""
+    echo "Success rates: PUT $(jq -r '.metrics.put_success.value // "N/A"' "${BENCH_DIR}/summary.json"), GET $(jq -r '.metrics.get_success.value // "N/A"' "${BENCH_DIR}/summary.json")"
 fi
 
 echo ""
 echo -e "${GREEN}========================================${NC}"
 echo ""
-echo -e "${GREEN}[OK] Benchmark complete${NC}"
+if [ "${K6_STATUS}" -ne 0 ]; then
+    echo -e "${RED}[FAIL] k6 exited with status ${K6_STATUS}: a threshold failed, or the run did not complete${NC}"
+    exit "${K6_STATUS}"
+fi
+echo -e "${GREEN}[OK] Benchmark complete: every threshold passed${NC}"

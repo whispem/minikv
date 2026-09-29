@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-# Verify cluster integrity
+# Runs `minikv verify` against a coordinator.
+#
+# verify is not implemented in minikv 2.0.1 (planned for 2.1.0): the command
+# says so and exits with status 1, and so does this script.
 
 set -euo pipefail
 
@@ -11,13 +14,13 @@ echo "  Coordinator: ${COORDINATOR}"
 echo "  Deep check: ${DEEP}"
 echo ""
 
-# Check coordinator health
+# Check that the coordinator answers
 echo "Checking coordinator..."
 if ! curl -sf "${COORDINATOR}/health/live" > /dev/null; then
     echo "[FAIL] Coordinator unreachable"
     exit 1
 fi
-echo "[OK] Coordinator healthy"
+echo "[OK] Coordinator reachable"
 
 # Run CLI verify command
 if [ "${DEEP}" = "true" ]; then
